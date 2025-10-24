@@ -45,7 +45,6 @@ export class scene2 extends Component {
 
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
         const itemdata = this.data[index];
-
         if (itemdata.type === 1) {
           const title = itemNode.getChildByName('title');
           const titleLabel = title.getComponent(Label);
