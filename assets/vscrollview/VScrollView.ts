@@ -114,12 +114,6 @@ export type GetItemHeightFn = (index: number) => number;
 /** 获取指定索引对应的预制体类型索引 */
 export type GetItemTypeIndexFn = (index: number) => number;
 
-/** 提供节点时同时返回预制体索引 */
-export type ProvideNodeWithPrefabIndexFn = (index: number) => {
-  node: Node | Promise<Node>;
-  prefabIndex: number;
-};
-
 /**
  * 虚拟滚动列表组件
  * - 支持虚拟列表和简单滚动两种模式
