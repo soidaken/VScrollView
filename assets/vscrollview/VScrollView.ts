@@ -18,6 +18,89 @@ import {
 import { VScrollViewItem } from './VScrollViewItem';
 const { ccclass, property, menu } = _decorator;
 
+/**
+ * 内部节点池（多类型支持）
+ */
+class InternalNodePool {
+  // 每种类型一个对象池
+  private pools: Map<number, Node[]> = new Map();
+  // 预制体引用
+  private prefabs: Prefab[] = [];
+
+  constructor(prefabs: Prefab[]) {
+    this.prefabs = prefabs;
+    // 初始化每个类型的对象池
+    prefabs.forEach((_, index) => {
+      this.pools.set(index, []);
+    });
+  }
+
+  /**
+   * 获取指定类型的节点
+   * @param typeIndex 类型索引（对应 itemPrefabs 数组索引）
+   */
+  get(typeIndex: number): Node {
+    const pool = this.pools.get(typeIndex);
+    if (!pool) {
+      console.error(`[VScrollView NodePool] 类型 ${typeIndex} 不存在`);
+      return null;
+    }
+
+    // 从池中取出节点
+    if (pool.length > 0) {
+      const node = pool.pop()!;
+      node.active = true;
+      return node;
+    }
+
+    // 池中没有，创建新节点
+    const newNode = instantiate(this.prefabs[typeIndex]);
+    return newNode;
+  }
+
+  /**
+   * 回收节点到对应类型的池中
+   * @param node 要回收的节点
+   * @param typeIndex 类型索引
+   */
+  put(node: Node, typeIndex: number) {
+    if (!node) return;
+
+    const pool = this.pools.get(typeIndex);
+    if (!pool) {
+      console.error(`[VScrollView NodePool] 类型 ${typeIndex} 不存在`);
+      node.destroy();
+      return;
+    }
+
+    node.active = false;
+    node.removeFromParent();
+    pool.push(node);
+  }
+
+  /**
+   * 清空所有对象池
+   */
+  clear() {
+    this.pools.forEach(pool => {
+      pool.forEach(node => node.destroy());
+      pool.length = 0;
+    });
+    this.pools.clear();
+  }
+
+  /**
+   * 获取统计信息
+   */
+  getStats() {
+    const stats: any = {};
+    this.pools.forEach((pool, type) => {
+      stats[`type${type}`] = pool.length;
+    });
+    return stats;
+  }
+}
+
 /** 渲染函数签名：外部把数据刷到 item 上 */
 export type RenderItemFn = (node: Node, index: number) => void;
 /** 提供新节点（从对象池取或用 prefab 实例化） */
@@ -26,6 +109,16 @@ export type ProvideNodeFn = (index: number) => Node | Promise<Node>; // 新增 i
 export type OnItemClickFn = (node: Node, index: number) => void;
 /** 新增项出现动画回调签名 */
 export type PlayItemAppearAnimationFn = (node: Node, index: number) => void;
+/** 获取指定索引的高度回调 */
+export type GetItemHeightFn = (index: number) => number;
+/** 获取指定索引对应的预制体类型索引 */
+export type GetItemTypeIndexFn = (index: number) => number;
+
+/** 提供节点时同时返回预制体索引 */
+export type ProvideNodeWithPrefabIndexFn = (index: number) => {
+  node: Node | Promise<Node>;
+  prefabIndex: number;
+};
 
 /**
  * 虚拟滚动列表组件
@@ -175,6 +268,11 @@ export class VirtualScrollView extends Component {
   public onItemClickFn: OnItemClickFn | null = null;
   public playItemAppearAnimationFn: PlayItemAppearAnimationFn | null = null; // 新增：Item出现动画回调
 
+  // 新增：不等高模式的高度获取回调
+  public getItemHeightFn: GetItemHeightFn | null = null;
+  // 新增：获取指定索引对应的预制体类型索引
+  public getItemTypeIndexFn: GetItemTypeIndexFn | null = null;
+
   // === 运行时状态 ===
   private _viewportH = 0;
   private _contentH = 0;
@@ -192,7 +290,14 @@ export class VirtualScrollView extends Component {
   // === 新增：不等高支持 ===
   private _itemHeights: number[] = []; // 每个 item 的实际高度
   private _prefixY: number[] = []; // 前缀和：第 i 项的顶部 Y 坐标
-  private _itemNodesCache: Node[] = []; // 预加载的节点缓存（用于获取高度）
+
+  // 新增：预制体高度缓存
+  private _prefabHeightCache: Map<number, number> = new Map();
+
+  // === 内部节点池 ===
+  private _nodePool: InternalNodePool | null = null;
+  // 记录每个槽位当前的预制体类型索引
+  private _slotPrefabIndices: number[] = [];
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -202,8 +307,6 @@ export class VirtualScrollView extends Component {
     return this.node.getComponent(UITransform)!;
   }
 
-  // 新增：记录上一次的总数，用于判断是否是新增的尾部数据
-  private _lastTotalCount: number = 0;
   // 新增：标记哪些索引需要播放动画
   private _needAnimateIndices: Set<number> = new Set();
 
@@ -252,6 +355,22 @@ export class VirtualScrollView extends Component {
 
     this._bindTouch();
     this._bindGlobalTouch();
+  }
+
+  onDestroy() {
+    input.off(Input.EventType.TOUCH_END, this._onGlobalTouchEnd, this);
+    input.off(Input.EventType.TOUCH_CANCEL, this._onGlobalTouchEnd, this);
+
+    this.node.off(Node.EventType.TOUCH_START, this._onDown, this);
+    this.node.off(Node.EventType.TOUCH_MOVE, this._onMove, this);
+    this.node.off(Node.EventType.TOUCH_END, this._onUp, this);
+    this.node.off(Node.EventType.TOUCH_CANCEL, this._onUp, this);
+
+    // 清理节点池
+    if (this._nodePool) {
+      this._nodePool.clear();
+      this._nodePool = null;
+    }
   }
 
   /** 绑定触摸事件 */
@@ -326,46 +445,75 @@ export class VirtualScrollView extends Component {
 
   /** 不等高模式初始化 */
   private async _initDynamicHeightMode() {
-    // 1. 预加载所有节点并获取高度
-    if (this.itemPrefabs.length === 0 || !this.provideNodeFn) {
-      console.error('[VirtualScrollView] 不等高模式需要外部提供 itemPrefabs 和 provideNodeFn');
+    // 场景A：外部提供了 getItemHeightFn（最优先）
+    if (this.getItemHeightFn) {
+      console.log('[VirtualScrollView] 使用外部提供的 getItemHeightFn');
+      this._itemHeights = [];
+      for (let i = 0; i < this.totalCount; i++) {
+        const h = this.getItemHeightFn(i);
+        this._itemHeights.push(h);
+      }
+      this._buildPrefixSum();
+      this._initDynamicSlots();
       return;
     }
 
-    //多预制体子项一定需要提供provideNodeFn回调
-    if (!this.provideNodeFn) {
-      //   this.provideNodeFn = async (index: number) => {
-      //     const prefabIndex = index % this.itemPrefabs.length;
-      //     return instantiate(this.itemPrefabs[prefabIndex]);
-      //   };
+    // 场景B：采样模式（需要 itemPrefabs + getItemTypeIndexFn）
+    if (this.itemPrefabs.length === 0 || !this.getItemTypeIndexFn) {
+      console.error(
+        '[VirtualScrollView] 不等高模式必须提供以下之一：\n' +
+          '1. getItemHeightFn 回调函数\n' +
+          '2. itemPrefabs 数组 + getItemTypeIndexFn 回调函数'
+      );
+      return;
     }
 
-    // 预加载所有节点并缓存
-    this._itemNodesCache = [];
+    console.log('[VirtualScrollView] 使用采样模式（从 itemPrefabs 采样高度）');
+
+    // 初始化节点池
+    this._nodePool = new InternalNodePool(this.itemPrefabs);
+
+    // 1. 采样每个预制体的高度（只创建预制体数量的样本节点）
+    this._prefabHeightCache.clear();
+    for (let i = 0; i < this.itemPrefabs.length; i++) {
+      const sampleNode = instantiate(this.itemPrefabs[i]);
+      const h = sampleNode.getComponent(UITransform)?.height || 100;
+      this._prefabHeightCache.set(i, h);
+      sampleNode.destroy(); // 立即销毁样本节点
+      console.log(`[VirtualScrollView] 预制体[${i}] 采样高度: ${h}`);
+    }
+
+    // 2. 为每个索引分配高度（通过 getItemTypeIndexFn 获取类型索引）
+    this._itemHeights = [];
     for (let i = 0; i < this.totalCount; i++) {
-      let node = this.provideNodeFn(i);
-      if (node instanceof Promise) {
-        node = await node;
+      const typeIndex = this.getItemTypeIndexFn(i); // ✅ 只调用函数，不创建节点
+      const height = this._prefabHeightCache.get(typeIndex);
+
+      if (height !== undefined) {
+        this._itemHeights.push(height);
+      } else {
+        console.warn(`[VirtualScrollView] 索引 ${i} 的类型索引 ${typeIndex} 无效，使用默认高度`);
+        this._itemHeights.push(this._prefabHeightCache.get(0) || 100);
       }
-      this._itemNodesCache.push(node);
-      const h = node.getComponent(UITransform)?.height || 100;
-      this._itemHeights.push(h);
     }
 
-    // 2. 构建前缀和
+    // 3. 构建前缀和
     this._buildPrefixSum();
 
-    // 3. 计算需要的槽位数（按可视区域 + 缓冲）
-    const avgHeight = this._contentH / this.totalCount;
+    // 4. 初始化环形缓冲（不创建任何节点）
+    this._initDynamicSlots();
+  }
+
+  /** 初始化不等高模式的环形缓冲槽位 */
+  private _initDynamicSlots() {
+    const avgHeight = this._contentH / this.totalCount || 100;
     const visibleCount = Math.ceil(this._viewportH / avgHeight);
     this._slots = Math.min(this.totalCount, visibleCount + this.buffer * 2 + 2);
 
-    // 4. 初始化环形缓冲（复用预加载的节点）
-    for (let i = 0; i < this._slots; i++) {
-      const node = this._itemNodesCache[i];
-      node.parent = this.content!;
-      this._slotNodes.push(node);
-    }
+    // 不预先创建节点，_slotNodes 为空数组
+    this._slotNodes = new Array(this._slots).fill(null);
+    // 初始化槽位类型索引数组
+    this._slotPrefabIndices = new Array(this._slots).fill(-1);
 
     this._slotFirstIndex = 0;
     this._layoutSlots(this._slotFirstIndex, true);
@@ -529,7 +677,7 @@ export class VirtualScrollView extends Component {
 
       const currentY = this.content!.position.y;
       const distance = Math.abs(targetY - currentY);
-      const duration = Math.max(0.25, distance / 3000); // 基于距离计算时间，最少0.25秒
+      const duration = Math.max(0.4, distance / 3000);
 
       this._scrollTween = tween(this.content!)
         .to(
@@ -537,7 +685,8 @@ export class VirtualScrollView extends Component {
           { position: new Vec3(0, targetY, 0) },
           {
             // easing: "cubicOut",
-            easing: 'backOut',
+            // easing: 'backOut',
+            easing: 'smooth',
             onUpdate: () => {
               this._updateVisible(false);
             },
@@ -749,11 +898,9 @@ export class VirtualScrollView extends Component {
     let newFirst = 0;
 
     if (this.useDynamicHeight) {
-      // 不等高模式：使用二分查找
       const range = this._calcVisibleRange(top);
       newFirst = range.start;
     } else {
-      // 等高模式
       const stride = this.itemHeight + this.spacing;
       const firstRow = Math.floor(top / stride);
       const first = firstRow * this.columns;
@@ -783,6 +930,12 @@ export class VirtualScrollView extends Component {
     if (diff > 0) {
       const moved = this._slotNodes.splice(0, absDiff);
       this._slotNodes.push(...moved);
+
+      // ✅ 同步移动预制体索引数组
+      if (this.useDynamicHeight && this._slotPrefabIndices.length > 0) {
+        const movedIndices = this._slotPrefabIndices.splice(0, absDiff);
+        this._slotPrefabIndices.push(...movedIndices);
+      }
       this._slotFirstIndex = newFirst;
 
       for (let i = 0; i < absDiff; i++) {
@@ -790,7 +943,8 @@ export class VirtualScrollView extends Component {
         const idx = this._slotFirstIndex + slot;
 
         if (idx >= this.totalCount) {
-          this._slotNodes[slot].active = false;
+          const node = this._slotNodes[slot];
+          if (node) node.active = false;
         } else {
           this._layoutSingleSlot(this._slotNodes[slot], idx, slot);
         }
@@ -798,13 +952,23 @@ export class VirtualScrollView extends Component {
     } else {
       const moved = this._slotNodes.splice(this._slotNodes.length + diff, absDiff);
       this._slotNodes.unshift(...moved);
+
+      // ✅ 同步移动预制体索引数组
+      if (this.useDynamicHeight && this._slotPrefabIndices.length > 0) {
+        const movedIndices = this._slotPrefabIndices.splice(
+          this._slotPrefabIndices.length + diff,
+          absDiff
+        );
+        this._slotPrefabIndices.unshift(...movedIndices);
+      }
       this._slotFirstIndex = newFirst;
 
       for (let i = 0; i < absDiff; i++) {
         const idx = this._slotFirstIndex + i;
 
         if (idx >= this.totalCount) {
-          this._slotNodes[i].active = false;
+          const node = this._slotNodes[i];
+          if (node) node.active = false;
         } else {
           this._layoutSingleSlot(this._slotNodes[i], idx, i);
         }
@@ -813,32 +977,70 @@ export class VirtualScrollView extends Component {
   }
 
   /** 布置单个槽位 */
-  private _layoutSingleSlot(node: Node, idx: number, slot: number) {
+  private async _layoutSingleSlot(node: Node | null, idx: number, slot: number) {
     if (!this.useVirtualList) return;
 
-    node.active = true;
-
     if (this.useDynamicHeight) {
-      // 不等高模式：从预加载缓存中获取节点并替换
-      if (this._itemNodesCache[idx] && this._itemNodesCache[idx] !== node) {
-        const cachedNode = this._itemNodesCache[idx];
-        // 如果当前节点不是目标节点，则替换
-        if (node.parent === this.content) {
-          const oldIndex = this._slotNodes.indexOf(node);
-          if (oldIndex !== -1) {
-            this._slotNodes[oldIndex] = cachedNode;
+      // 获取当前索引应该使用的预制体类型
+      let targetPrefabIndex = -1;
+      targetPrefabIndex = this.getItemTypeIndexFn(idx);
+
+      // 检查槽位中的节点类型是否匹配
+      const currentPrefabIndex = this._slotPrefabIndices[slot];
+      let newNode: Node | null = null;
+
+      if (currentPrefabIndex === targetPrefabIndex && this._slotNodes[slot]) {
+        // 类型匹配，复用节点
+        newNode = this._slotNodes[slot];
+      } else {
+        // 类型不匹配，需要更换节点
+
+        // 回收旧节点到对象池
+        if (this._slotNodes[slot] && this._nodePool && currentPrefabIndex >= 0) {
+          this._nodePool.put(this._slotNodes[slot], currentPrefabIndex);
+        }
+
+        // 从对象池获取新节点（池中没有时会自动创建）
+        if (this._nodePool) {
+          newNode = this._nodePool.get(targetPrefabIndex);
+          if (!newNode) {
+            console.error(`[VScrollView] 无法获取类型 ${targetPrefabIndex} 的节点`);
+            return;
           }
-          node.removeFromParent();
-          cachedNode.parent = this.content;
-          node = cachedNode;
+          newNode.parent = this.content;
+          this._slotNodes[slot] = newNode;
+          this._slotPrefabIndices[slot] = targetPrefabIndex;
         }
       }
 
+      if (!newNode) {
+        console.error(`[VScrollView] 槽位 ${slot} 节点为空，索引 ${idx}`);
+        return;
+      }
+
+      newNode.active = true;
+
       // 使用前缀和计算位置
       const y = -this._prefixY[idx] - this._itemHeights[idx] / 2;
-      node.setPosition(0, this.pixelAlign ? Math.round(y) : y);
+      newNode.setPosition(0, this.pixelAlign ? Math.round(y) : y);
+
+      this._updateItemClickHandler(newNode, idx);
+      if (this.renderItemFn) this.renderItemFn(newNode, idx);
+
+      // 检查是否需要播放动画
+      if (this._needAnimateIndices.has(idx)) {
+        if (this.playItemAppearAnimationFn) {
+          this.playItemAppearAnimationFn(newNode, idx);
+        } else {
+          this._playDefaultItemAppearAnimation(newNode, idx);
+        }
+        this._needAnimateIndices.delete(idx);
+      }
     } else {
-      // 等高模式
+      // 等高模式（保持原逻辑）
+      if (!node) return;
+      node.active = true;
+
       const stride = this.itemHeight + this.spacing;
       const row = Math.floor(idx / this.columns);
       const col = idx % this.columns;
@@ -854,20 +1056,18 @@ export class VirtualScrollView extends Component {
         itf.width = this.itemWidth;
         itf.height = this.itemHeight;
       }
-    }
 
-    this._updateItemClickHandler(node, idx);
-    if (this.renderItemFn) this.renderItemFn(node, idx);
+      this._updateItemClickHandler(node, idx);
+      if (this.renderItemFn) this.renderItemFn(node, idx);
 
-    // 检查是否需要播放动画
-    if (this._needAnimateIndices.has(idx)) {
-      // 优先使用外部传入的动画函数，否则使用默认动画
-      if (this.playItemAppearAnimationFn) {
-        this.playItemAppearAnimationFn(node, idx);
-      } else {
-        this._playDefaultItemAppearAnimation(node, idx);
+      if (this._needAnimateIndices.has(idx)) {
+        if (this.playItemAppearAnimationFn) {
+          this.playItemAppearAnimationFn(node, idx);
+        } else {
+          this._playDefaultItemAppearAnimation(node, idx);
+        }
+        this._needAnimateIndices.delete(idx);
       }
-      this._needAnimateIndices.delete(idx); // 播放后移除标记
     }
   }
 
@@ -917,7 +1117,7 @@ export class VirtualScrollView extends Component {
       const node = this._slotNodes[s];
 
       if (idx >= this.totalCount) {
-        node.active = false;
+        if (node) node.active = false;
       } else {
         this._layoutSingleSlot(node, idx, s);
       }

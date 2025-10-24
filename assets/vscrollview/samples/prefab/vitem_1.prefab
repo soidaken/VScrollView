@@ -269,7 +269,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 231,
+      "width": 239.56,
       "height": 30
     },
     "_anchorPoint": {
@@ -314,17 +314,14 @@
     "_lineHeight": 30,
     "_overflow": 0,
     "_enableWrapText": true,
-    "_font": {
-      "__uuid__": "88b19344-b7ab-435b-b8cf-72bdc4276ce1",
-      "__expectedType__": "cc.BitmapFont"
-    },
-    "_isSystemFontUsed": false,
+    "_font": null,
+    "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_isItalic": false,
-    "_isBold": true,
+    "_isBold": false,
     "_isUnderline": false,
     "_underlineHeight": 2,
-    "_cacheMode": 0,
+    "_cacheMode": 2,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -431,7 +428,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 117.86,
+      "width": 110.14,
       "height": 30
     },
     "_anchorPoint": {
@@ -476,17 +473,14 @@
     "_lineHeight": 30,
     "_overflow": 0,
     "_enableWrapText": true,
-    "_font": {
-      "__uuid__": "88b19344-b7ab-435b-b8cf-72bdc4276ce1",
-      "__expectedType__": "cc.BitmapFont"
-    },
-    "_isSystemFontUsed": false,
+    "_font": null,
+    "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_isItalic": false,
-    "_isBold": true,
+    "_isBold": false,
     "_isUnderline": false,
     "_underlineHeight": 2,
-    "_cacheMode": 0,
+    "_cacheMode": 2,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -614,6 +608,7 @@
       "__id__": 0
     },
     "fileId": "53AQrnKhhEi7dCIJ699C/M",
+    "instance": null,
     "targetOverrides": null
   }
 ]
