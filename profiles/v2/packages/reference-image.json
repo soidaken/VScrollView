@@ -1,0 +1,19 @@
+{
+  "__version__": "1.0.0",
+  "config": {
+    "images": [],
+    "sceneUUID": {
+      "b0e61247-4e0e-4111-8cbf-8631439e28c0": {
+        "path": ""
+      }
+    },
+    "scene": "964fad2c-3790-4f4d-b097-5b84c706f594"
+  },
+  "show": true,
+  "root-path": "C:\\Users\\zzz\\Pictures\\from_ios",
+  "sx": 0.54,
+  "sy": 0.54,
+  "x": -278.7,
+  "y": 278.5,
+  "opacity": 22
+}

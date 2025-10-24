@@ -1,0 +1,6 @@
+# 默认所有文本文件使用 LF
+* text eol=lf
+
+# 如果是 Windows 特定批处理文件，可以例外：
+*.bat text eol=crlf
+*.cmd text eol=crlf

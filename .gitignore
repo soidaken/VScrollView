@@ -1,0 +1,20 @@
+# === Cocos Creator 项目缓存 ===
+library/
+temp/
+local/
+
+# === 构建输出 ===
+build/
+log/
+
+# === Node.js 依赖 ===
+node_modules/
+
+# === 编辑器相关 ===
+.vscode/
+.DS_Store
+Thumbs.db
+
+# === 临时脚本或锁文件（可选）===
+package-lock.json
+yarn.lock
