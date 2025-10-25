@@ -7,6 +7,7 @@ import {
   Node,
   Rect,
   Sprite,
+  Tween,
   tween,
   UITransform,
   Vec2,
@@ -60,7 +61,7 @@ export default class UIButton extends Component {
   scaleTarget: number = 0.96;
 
   @property({ tooltip: '交互时缩放动画的持续时间（毫秒）', range: [20, 300, 10] })
-  duration: number = 100;
+  duration: number = 60;
 
   @property({ tooltip: '是否播放音效' })
   b_audioEffectWhenClick: boolean = false;
@@ -75,12 +76,20 @@ export default class UIButton extends Component {
   })
   clickCallbackInterval: number = 250;
 
+  @property({
+    tooltip: '移动阈值（像素）- 超过此距离视为滑动而非点击',
+    range: [5, 50, 1],
+  })
+  movementThreshold: number = 10;
+
   // ==================== Private Fields ====================
   private _lastTouchStartTime: number = 0;
   private _lastTouchEndTime: number = 0;
   private _currentTouchStartTime: number = 0;
   private _lastClickCallbackTime: number = 0;
   private _touchMoveValid = false;
+  private _touchStartPos: Vec2 = new Vec2();
+  private _touchMovedBeyondThreshold = false;
   private _registed: boolean = false;
 
   private _initScale: Vec3 = new Vec3(1, 1, 1);
@@ -176,6 +185,8 @@ export default class UIButton extends Component {
 
     this._currentTouchStartTime = Date.now();
     this._touchMoveValid = true;
+    this._touchMovedBeyondThreshold = false;
+    evt.getUILocation(this._touchStartPos);
 
     this._cbStarted && this._cbStarted(this, evt);
     if (this.node_target) {
@@ -188,6 +199,15 @@ export default class UIButton extends Component {
     // if (this.b_stopPropagation) {
     // 	evt.propagationStopped = true;
     // }
+
+    // 检查移动距离是否超过阈值
+    if (!this._touchMovedBeyondThreshold) {
+      const currentPos = evt.getUILocation(this._tmpVec2);
+      const distance = Vec2.distance(this._touchStartPos, currentPos);
+      if (distance > this.movementThreshold) {
+        this._touchMovedBeyondThreshold = true;
+      }
+    }
 
     if (this._uit) {
       const tpos = evt.getUILocation(this._tmpVec2);
@@ -248,6 +268,10 @@ export default class UIButton extends Component {
       // console.logUI(`UIButton: clickSureValid false, touch moved out of bounds`);
       return false;
     }
+    if (this._touchMovedBeyondThreshold) {
+      // console.logUI(`UIButton: clickSureValid false, touch moved beyond threshold`);
+      return false;
+    }
     return true;
   }
 
@@ -285,6 +309,16 @@ export default class UIButton extends Component {
 
   private _animateRelease(target: Node) {
     if (!target || !this.b_interaction) return;
+    if (target.scale.x === this._initScale.x && target.scale.y === this._initScale.y) {
+      return;
+    }
+    Tween.stopAllByTarget(target);
+    target.setScale(
+      this._initScale.x * this.scaleTarget,
+      this._initScale.y * this.scaleTarget,
+      this._initScale.z
+    );
+
     tween(target)
       // .bindNodeState(true)
       .to(

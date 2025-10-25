@@ -1,0 +1,43 @@
+{
+  "__version__": "1.0.1",
+  "builder": {
+    "common": {
+      "binGroupConfig": {
+        "threshold": 16,
+        "enable": false
+      },
+      "polyfills": {
+        "asyncFunctions": true
+      },
+      "buildPath": "project://build",
+      "outputName": "web-mobile",
+      "mainBundleCompressionType": "merge_all_json",
+      "platform": "web-mobile",
+      "name": "VScrollView",
+      "startScene": "1ee53ca4-49b1-4c6f-9885-30bc84e3c1c6",
+      "md5Cache": true,
+      "overwriteProjectSettings": {
+        "includeModules": {
+          "gfx-webgl2": "inherit-project-setting"
+        }
+      }
+    },
+    "options": {
+      "web-mobile": {
+        "useWebGPU": false,
+        "orientation": "portrait",
+        "embedWebDebugger": false,
+        "__version__": "1.0.1"
+      }
+    },
+    "taskOptionsMap": {
+      "1761416624638": {
+        "useWebGPU": false,
+        "orientation": "portrait",
+        "embedWebDebugger": false,
+        "__version__": "1.0.1"
+      }
+    },
+    "__version__": "1.3.9"
+  }
+}

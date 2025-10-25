@@ -119,13 +119,13 @@
             "_value": true
           },
           "audio": {
-            "_value": true
+            "_value": false
           },
           "video": {
-            "_value": true
+            "_value": false
           },
           "webview": {
-            "_value": true
+            "_value": false
           },
           "tween": {
             "_value": true
@@ -143,13 +143,13 @@
             "_value": false
           },
           "tiled-map": {
-            "_value": true
+            "_value": false
           },
           "vendor-google": {
             "_value": false
           },
           "spine": {
-            "_value": true,
+            "_value": false,
             "_option": "spine-3.8"
           },
           "spine-3.8": {
@@ -190,14 +190,11 @@
             "_value": false
           }
         },
-        "flags": {
-          "LOAD_SPINE_MANUALLY": false
-        },
+        "flags": {},
         "includeModules": [
           "2d",
           "affine-transform",
           "animation",
-          "audio",
           "base",
           "custom-pipeline",
           "gfx-webgl",
@@ -209,13 +206,9 @@
           "profiler",
           "rich-text",
           "sorting-2d",
-          "spine-3.8",
-          "tiled-map",
           "tween",
           "ui",
-          "ui-skew",
-          "video",
-          "webview"
+          "ui-skew"
         ],
         "noDeprecatedFeatures": {
           "value": false,
