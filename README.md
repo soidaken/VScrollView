@@ -35,4 +35,4 @@
 
 # 最后,如果你心情好,请我喝杯咖啡
 
-![alt text](reward_code.png)
+![alt text](./reward_code.png)
