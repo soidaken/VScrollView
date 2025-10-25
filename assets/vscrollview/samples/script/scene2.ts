@@ -32,18 +32,6 @@ export class scene2 extends Component {
         return itemdata.type - 1; // 返回 0, 1, 2
       };
 
-      //不等高子项模式需要数据和每一项使用的子项预制体匹配上,所以定需要提供provideNodeFn
-      this.vlist.provideNodeFn = (index: number) => {
-        const itemdata = this.data[index];
-        if (itemdata.type === 1) {
-          return instantiate(this.vlist.itemPrefabs[0]);
-        } else if (itemdata.type === 2) {
-          return instantiate(this.vlist.itemPrefabs[1]);
-        } else if (itemdata.type === 3) {
-          return instantiate(this.vlist.itemPrefabs[2]);
-        }
-      };
-
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
         const itemdata = this.data[index];
         if (itemdata.type === 1) {
@@ -89,6 +77,16 @@ export class scene2 extends Component {
       const tip = this.node.getChildByName('tip').getComponent(Label);
       tip.string = `分层优化:${this.renderOptOnOff ? '开启' : '关闭'}`;
       this.vlist.onOffSortLayer(this.renderOptOnOff);
+    });
+
+    UIButton.onClicked(this.node.getChildByName('btn5'), (button: UIButton) => {
+      this.data.push({
+        data1: `新增数据: 第${this.data.length + 1}条数据`,
+        data2: `2025.10.${this.data.length + 1}`,
+        type: (this.data.length % 3) + 1,
+      });
+      this.vlist.refreshList(this.data);
+      this.vlist.scrollToBottom(true);
     });
   }
 }

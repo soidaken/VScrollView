@@ -63,5 +63,15 @@ export class scene4 extends Component {
       tip.string = `分层优化:${this.renderOptOnOff ? '开启' : '关闭'}`;
       this.vlist.onOffSortLayer(this.renderOptOnOff);
     });
+
+    UIButton.onClicked(this.node.getChildByName('btn5'), (button: UIButton) => {
+      this.data.push({
+        data1: `第 ${this.data.length + 1} 项`,
+        icon: this.data.length % this.spfs.length,
+      });
+      this.vlist.flashToBottom();
+      this.vlist.refreshList(this.data);
+      this.vlist.scrollToBottom(true);
+    });
   }
 }

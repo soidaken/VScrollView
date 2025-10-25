@@ -742,7 +742,7 @@ export class VirtualScrollView extends Component {
   public setTotalCount(count: number) {
     this._getContentNode();
     if (!this.useVirtualList) {
-      console.warn('[VirtualScrollView] 简单滚动模式不支持 setTotalCount');
+      console.warn('[VScrollView] 非虚拟列表模式，不支持 setTotalCount');
       return;
     }
     const oldCount = this.totalCount;
@@ -755,10 +755,82 @@ export class VirtualScrollView extends Component {
       }
     }
 
-    this._recomputeContentHeight();
+    // 不等高模式下扩展高度数组
+    if (this.useDynamicHeight) {
+      // 扩展 _itemHeights 数组
+      const oldLength = this._itemHeights.length;
+      if (this.totalCount > oldLength) {
+        // 为新增的索引分配高度
+        for (let i = oldLength; i < this.totalCount; i++) {
+          let height = 100; // 默认高度
+
+          // 优先使用 getItemHeightFn
+          if (this.getItemHeightFn) {
+            height = this.getItemHeightFn(i);
+          }
+          // 否则使用预制体采样高度
+          else if (this.getItemTypeIndexFn && this._prefabHeightCache.size > 0) {
+            const typeIndex = this.getItemTypeIndexFn(i);
+            height = this._prefabHeightCache.get(typeIndex) || 100;
+          }
+
+          this._itemHeights.push(height);
+        }
+      } else if (this.totalCount < oldLength) {
+        // 减少数据时截断数组
+        this._itemHeights.length = this.totalCount;
+      }
+
+      // 重新构建前缀和
+      this._buildPrefixSum();
+
+      // ✅ 新增：动态扩展槽位
+      if (this.totalCount > oldCount) {
+        this._expandSlotsIfNeeded();
+      }
+    } else {
+      // 等高模式使用原有逻辑
+      this._recomputeContentHeight();
+    }
+
     this._slotFirstIndex = math.clamp(this._slotFirstIndex, 0, Math.max(0, this.totalCount - 1));
     this._layoutSlots(this._slotFirstIndex, true);
     this._updateVisible(true);
+  }
+
+  /**
+   * 动态扩展槽位（不等高模式）
+   */
+  private _expandSlotsIfNeeded() {
+    // 重新计算需要的槽位数
+    const top = 0;
+    const bottom = this._viewportH;
+
+    let neededSlots = 0;
+    let y = 0;
+    for (let i = 0; i < this.totalCount; i++) {
+      if (y >= bottom) break;
+      neededSlots++;
+      y += this._itemHeights[i] + this.spacing;
+    }
+
+    // 加上缓冲
+    neededSlots += this.buffer * 2;
+    const newSlots = Math.min(neededSlots, this.totalCount);
+
+    // 如果需要更多槽位
+    if (newSlots > this._slots) {
+      const oldSlots = this._slots;
+      this._slots = newSlots;
+
+      // 扩展槽位数组
+      for (let i = oldSlots; i < this._slots; i++) {
+        this._slotNodes.push(null);
+        this._slotPrefabIndices.push(-1);
+      }
+
+      console.log(`[VScrollView] 槽位扩展: ${oldSlots} -> ${this._slots}`);
+    }
   }
 
   private _scrollTween: any = null;

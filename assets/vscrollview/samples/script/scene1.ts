@@ -59,5 +59,17 @@ export class scene1 extends Component {
       tip.string = `分层优化:${this.renderOptOnOff ? '开启' : '关闭'}`;
       this.vlist.onOffSortLayer(this.renderOptOnOff);
     });
+
+    UIButton.onClicked(this.node.getChildByName('btn5'), (button: UIButton) => {
+      this.data.push({
+        data1: `新增的数据 ${this.data.length + 1}`,
+        data2: `2025.10.${this.data.length + 1}`,
+      });
+
+      //有时候,列表在顶部,你要新增一项,这里就是先设置列表跳到旧的底部,再刷新滚动到新的底部,这就很自然.
+      this.vlist.flashToBottom();
+      this.vlist.refreshList(this.data);
+      this.vlist.scrollToBottom(true);
+    });
   }
 }
