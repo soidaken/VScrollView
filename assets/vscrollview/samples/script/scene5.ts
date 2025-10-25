@@ -32,7 +32,7 @@ export class scene5 extends Component {
     game.frameRate = 120;
 
     // 模拟聊天数据
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 2; i++) {
       const message = this.generateRandomMessage();
       this.chatData.push({
         player: i % 2 === 0 ? 1 : 2,
@@ -67,9 +67,9 @@ export class scene5 extends Component {
         const uit = itemNode.getComponent(UITransform);
         label.updateRenderData();
         uit.height = label.node.getComponent(UITransform).height + 20 * 2;
-        console.log(
-          `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
-        );
+        // console.log(
+        //   `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
+        // );
         this.chatData[index].calculatedHeight = uit.height;
         this.vlist.updateItemHeight(index, uit.height);
       };

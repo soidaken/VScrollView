@@ -511,7 +511,20 @@ export class VirtualScrollView extends Component {
   private _initDynamicSlots() {
     const avgHeight = this._contentH / this.totalCount || 100;
     const visibleCount = Math.ceil(this._viewportH / avgHeight);
-    this._slots = Math.min(this.totalCount, visibleCount + this.buffer * 2 + 2);
+
+    // ✅ 计算需要的槽位数（加上缓冲）
+    let neededSlots = visibleCount + this.buffer * 2 + 4;
+
+    // ✅ 保证最小槽位数量（至少能容纳视口 + 一倍缓冲）
+    const minSlots = Math.ceil(this._viewportH / 80) + this.buffer * 2; // 假设最小高度80px
+    neededSlots = Math.max(neededSlots, minSlots);
+
+    // ✅ 限制最大槽位数量（避免初始数据少时创建过多槽位）
+    const maxSlots = Math.ceil(this._viewportH / 50) + this.buffer * 4; // 假设最小高度50px
+    neededSlots = Math.min(neededSlots, maxSlots);
+
+    // ✅ 不能超过总数据量（但允许预留空间）
+    this._slots = Math.min(neededSlots, Math.max(this.totalCount, minSlots));
 
     // 不预先创建节点，_slotNodes 为空数组
     this._slotNodes = new Array(this._slots).fill(null);
@@ -520,6 +533,10 @@ export class VirtualScrollView extends Component {
 
     this._slotFirstIndex = 0;
     this._layoutSlots(this._slotFirstIndex, true);
+
+    console.log(
+      `[VScrollView] 初始化槽位: ${this._slots} (总数据: ${this.totalCount}, 视口高度: ${this._viewportH})`
+    );
   }
 
   /** 构建前缀和数组 */
@@ -802,12 +819,11 @@ export class VirtualScrollView extends Component {
    * 动态扩展槽位（不等高模式）
    */
   private _expandSlotsIfNeeded() {
-    // 重新计算需要的槽位数
-    const top = 0;
-    const bottom = this._viewportH;
-
+    // 计算当前需要的槽位数
     let neededSlots = 0;
     let y = 0;
+    const bottom = this._viewportH;
+
     for (let i = 0; i < this.totalCount; i++) {
       if (y >= bottom) break;
       neededSlots++;
@@ -815,13 +831,20 @@ export class VirtualScrollView extends Component {
     }
 
     // 加上缓冲
-    neededSlots += this.buffer * 2;
-    const newSlots = Math.min(neededSlots, this.totalCount);
+    neededSlots += this.buffer * 2 + 4;
+
+    // ✅ 保证最小槽位数量
+    const minSlots = Math.ceil(this._viewportH / 80) + this.buffer * 2;
+    neededSlots = Math.max(neededSlots, minSlots);
+
+    // ✅ 限制在合理范围
+    const maxSlots = Math.ceil(this._viewportH / 50) + this.buffer * 4;
+    neededSlots = Math.min(neededSlots, maxSlots);
 
     // 如果需要更多槽位
-    if (newSlots > this._slots) {
+    if (neededSlots > this._slots) {
       const oldSlots = this._slots;
-      this._slots = newSlots;
+      this._slots = neededSlots;
 
       // 扩展槽位数组
       for (let i = oldSlots; i < this._slots; i++) {
@@ -829,7 +852,9 @@ export class VirtualScrollView extends Component {
         this._slotPrefabIndices.push(-1);
       }
 
-      console.log(`[VScrollView] 槽位扩展: ${oldSlots} -> ${this._slots}`);
+      console.log(
+        `[VScrollView] 槽位扩展: ${oldSlots} -> ${this._slots} (总数据: ${this.totalCount})`
+      );
     }
   }
 
