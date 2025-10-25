@@ -1,4 +1,4 @@
-import { _decorator, Component, instantiate, Label, Node } from 'cc';
+import { _decorator, Component, game, instantiate, Label, Node } from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
@@ -14,8 +14,9 @@ export class scene2 extends Component {
   private renderOptOnOff = true;
 
   onLoad() {
+    game.frameRate = 120;
     // 模拟数据
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 20; i++) {
       this.data.push({
         data1: `第${i + 1}条数据`,
         data2: `2025.10.${1 + i}`,

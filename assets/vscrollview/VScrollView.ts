@@ -448,6 +448,15 @@ export class VirtualScrollView extends Component {
         this._itemHeights.push(h);
       }
       this._buildPrefixSum();
+      // ✅ 也需要初始化节点池（如果有 itemPrefabs）
+      if (this.itemPrefabs.length > 0) {
+        console.log('[VirtualScrollView] 初始化节点池');
+        this._nodePool = new InternalNodePool(this.itemPrefabs);
+      } else {
+        console.error('[VirtualScrollView] 需要至少一个 itemPrefab');
+        return;
+      }
+
       this._initDynamicSlots();
       return;
     }
@@ -775,7 +784,7 @@ export class VirtualScrollView extends Component {
 
       const currentY = this.content!.position.y;
       const distance = Math.abs(targetY - currentY);
-      const duration = Math.max(0.4, distance / 3000);
+      const duration = Math.max(0.2, distance / 3000);
 
       this._scrollTween = tween(this.content!)
         .to(
@@ -1142,9 +1151,22 @@ export class VirtualScrollView extends Component {
         }
       }
 
-      // 使用前缀和计算位置
-      const y = -this._prefixY[idx] - this._itemHeights[idx] / 2;
+      // ✅ 获取节点的锚点和高度
+      const uit = newNode.getComponent(UITransform);
+      const anchorY = uit?.anchorY ?? 0.5;
+      const height = this._itemHeights[idx];
+
+      // ✅ 根据锚点计算位置
+      const topY = this._prefixY[idx];
+      const anchorOffsetY = height * (1 - anchorY);
+      const nodeY = topY + anchorOffsetY;
+
+      const y = -nodeY;
       newNode.setPosition(0, this.pixelAlign ? Math.round(y) : y);
+
+      // // 使用前缀和计算位置
+      // const y = -this._prefixY[idx] - this._itemHeights[idx] / 2;
+      // newNode.setPosition(0, this.pixelAlign ? Math.round(y) : y);
 
       // 检查是否需要播放动画
       if (this._needAnimateIndices.has(idx)) {
@@ -1156,7 +1178,7 @@ export class VirtualScrollView extends Component {
         this._needAnimateIndices.delete(idx);
       }
     } else {
-      // 等高模式（保持原逻辑）
+      // 等高模式
       if (!node) return;
       node.active = true;
 
@@ -1164,7 +1186,16 @@ export class VirtualScrollView extends Component {
       const row = Math.floor(idx / this.columns);
       const col = idx % this.columns;
 
-      const y = -row * stride - this.itemHeight / 2;
+      // ✅ 获取节点的锚点
+      const uit = node.getComponent(UITransform);
+      const anchorY = uit?.anchorY ?? 0.5;
+
+      // ✅ 根据锚点计算 Y 位置
+      const topY = row * stride; // 节点顶部在 content 中的 Y 坐标
+      const anchorOffsetY = this.itemHeight * (1 - anchorY); // 锚点相对于顶部的偏移
+      const nodeY = topY + anchorOffsetY; // 锚点在 content 中的 Y 坐标
+      const y = -nodeY; // Cocos Y 轴向上为正
+
       const totalWidth = this.columns * this.itemWidth + (this.columns - 1) * this.columnSpacing;
       const x = col * (this.itemWidth + this.columnSpacing) - totalWidth / 2 + this.itemWidth / 2;
 

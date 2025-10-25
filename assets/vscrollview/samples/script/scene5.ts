@@ -1,4 +1,16 @@
-import { _decorator, Component, game, Label, Node, Sprite, SpriteFrame } from 'cc';
+import {
+  _decorator,
+  Component,
+  game,
+  instantiate,
+  Label,
+  Node,
+  Sprite,
+  SpriteFrame,
+  tween,
+  UITransform,
+  Vec3,
+} from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
@@ -8,46 +20,82 @@ export class scene5 extends Component {
   @property(VirtualScrollView)
   vlist: VirtualScrollView | null = null;
 
-  //列表数据
-  private data: any[] = [];
+  private chatData: Array<{
+    player: number;
+    message: string;
+    calculatedHeight: number; // 缓存计算好的高度
+  }> = [];
 
   private renderOptOnOff = true;
 
   onLoad() {
     game.frameRate = 120;
-    // 模拟数据
-    for (let i = 0; i < 50; i++) {
-      this.data.push({
-        data1: `重要通知${i + 1}`,
-        data2: `2025.10.${1 + i}`,
+
+    // 模拟聊天数据
+    for (let i = 0; i < 20; i++) {
+      const message = this.generateRandomMessage();
+      this.chatData.push({
+        player: i % 2 === 0 ? 1 : 2,
+        message: message,
+        calculatedHeight: 0,
       });
     }
 
-    // 设置虚拟列表数据
     if (this.vlist) {
+      // ✅ 提供高度获取函数
+      this.vlist.getItemHeightFn = (index: number) => {
+        return this.chatData[index].calculatedHeight;
+      };
+
+      this.vlist.getItemTypeIndexFn = (index: number) => {
+        const data = this.chatData[index];
+        if (data.player === 1) {
+          return 0; // 玩家1使用第一个预制体
+        } else {
+          return 1; // 玩家2使用第二个预制体
+        }
+      };
+
+      // 渲染函数
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
-        const title = itemNode.getChildByName('title').getComponent(Label);
-        const time = itemNode.getChildByName('time').getComponent(Label);
+        const data = this.chatData[index];
+        const label = itemNode.getChildByName('msg').getComponent(Label);
+        label.string = `第${index + 1}条消息: ${data.message}`;
 
-        title!.string = this.data[index].data1;
-        time!.string = this.data[index].data2;
+        //需要根据真实渲染内容计算出子项正确高度
+        //这个必须外部自己提供,因为组件的高度你可能有自己留白的需求,比如下面的上下各留20px空白
+        const uit = itemNode.getComponent(UITransform);
+        label.updateRenderData();
+        uit.height = label.node.getComponent(UITransform).height + 20 * 2;
+        console.log(
+          `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
+        );
+        this.chatData[index].calculatedHeight = uit.height;
+        this.vlist.updateItemHeight(index, uit.height);
       };
 
-      this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
-        const tip = this.node.getChildByName('tip').getComponent(Label);
-        tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
+      this.vlist.playItemAppearAnimationFn = (itemNode: Node, index: number) => {
+        itemNode.setScale(0, 0);
+        tween(itemNode)
+          .to(0.15, { scale: new Vec3(1, 1, 1) }, { easing: 'smooth' })
+          .start();
       };
 
-      this.vlist.refreshList(this.data);
+      this.vlist.refreshList(this.chatData);
     }
 
+    this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
+      const tip = this.node.getChildByName('tip').getComponent(Label);
+      tip.string = `你点击了第${index + 1}项`;
+    };
+
     UIButton.onClicked(this.node.getChildByName('btn1'), (button: UIButton) => {
-      this.data[1].data1 = '【已修改】重要通知2';
-      this.vlist.refreshIndex(1);
+      this.addNewMessage(1);
     });
 
     UIButton.onClicked(this.node.getChildByName('btn2'), (button: UIButton) => {
-      this.vlist.scrollToBottom(true);
+      // this.vlist.scrollToBottom(true);
+      this.addNewMessage(2);
     });
 
     UIButton.onClicked(this.node.getChildByName('btn3'), (button: UIButton) => {
@@ -60,5 +108,91 @@ export class scene5 extends Component {
       tip.string = `分层优化:${this.renderOptOnOff ? '开启' : '关闭'}`;
       this.vlist.onOffSortLayer(this.renderOptOnOff);
     });
+  }
+
+  // ✅ 新增消息时
+  addNewMessage(playerId: number, message?: string) {
+    this.chatData.push({
+      player: playerId,
+      message: this.generateRandomMessage(),
+      calculatedHeight: 0,
+    });
+
+    this.vlist.flashToBottom();
+
+    // 更新列表
+    this.vlist.refreshList(this.chatData.length);
+
+    this.vlist.scrollToBottom(true);
+  }
+
+  // ✅ 修改某条消息时
+  updateMessage(index: number, newMessage: string) {
+    this.chatData[index].message = newMessage;
+    this.chatData[index].calculatedHeight = 0;
+
+    // 刷新显示
+    this.vlist.refreshIndex(index);
+  }
+
+  // 生成随机消息
+  private generateRandomMessage(): string {
+    const shortMessages = [
+      '好的',
+      '收到',
+      '👌',
+      '没问题',
+      '知道了',
+      '哈哈哈',
+      '😂😂😂',
+      '在吗？',
+      '晚安',
+      '早上好',
+    ];
+
+    const mediumMessages = [
+      '今天天气不错，出去走走吧',
+      '刚才看到一个很有意思的视频',
+      '周末一起去看电影怎么样？',
+      '这个功能终于做完了',
+      '今天加班到很晚，累死了',
+      '明天早上记得带伞',
+      '午餐想吃什么？',
+      '这个bug修了一下午',
+      '刚才在地铁上遇到老同学了',
+      '今天心情超级好',
+    ];
+
+    const longMessages = [
+      '你好，今天深圳的天气真的很舒服，阳光明媚，微风拂面，特别适合出去走走。下午有时间的话，要不要一起去公园散散步？',
+      '刚才路过一家新开的咖啡店，装修特别有格调，咖啡的味道也超级棒。他们家还有很多特色甜点，改天带你去尝尝！',
+      '今天遇到了一件特别有趣的事情，想和你分享一下。早上在地铁上看到一个小朋友，超级可爱，一直在和妈妈聊天，说的话特别搞笑。',
+      '最近在看一本很有意思的书，讲的是关于时间管理的，里面有很多实用的方法。看完之后感觉对自己的工作效率提升很有帮助，推荐给你！',
+      '这个项目从立项到现在已经快三个月了，中间遇到了很多困难，但是团队一起努力，终于在今天完成了。感觉特别有成就感，大家也都很开心！',
+    ];
+
+    const emojis = ['😄', '😊', '😂', '🎉', '👍', '💪', '🌈', '☀️', '🌟', '❤️', '🔥', '✨'];
+
+    // 随机选择消息长度类型
+    const rand = Math.random();
+    let message = '';
+
+    if (rand < 0.3) {
+      // 30% 短消息
+      message = shortMessages[Math.floor(Math.random() * shortMessages.length)];
+    } else if (rand < 0.7) {
+      // 40% 中等长度
+      message = mediumMessages[Math.floor(Math.random() * mediumMessages.length)];
+      // 随机添加 1-2 个 emoji
+      const emojiCount = Math.floor(Math.random() * 2) + 1;
+      for (let i = 0; i < emojiCount; i++) {
+        message += emojis[Math.floor(Math.random() * emojis.length)];
+      }
+    } else {
+      // 30% 长消息
+      message = longMessages[Math.floor(Math.random() * longMessages.length)];
+    }
+
+    return message;
   }
 }

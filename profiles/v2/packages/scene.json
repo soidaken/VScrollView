@@ -28,7 +28,12 @@
   "__version__": "1.0.3",
   "builder": {},
   "tabs": [
-    "679d7d04-7dbc-4cab-98e5-68dd29fe2117"
+    "679d7d04-7dbc-4cab-98e5-68dd29fe2117",
+    "90d80fbf-2766-4731-a032-95a819fd0562",
+    "b0e61247-4e0e-4111-8cbf-8631439e28c0",
+    "4a70cf7e-a185-4d21-8e5c-7267b1ffa065",
+    "d5251a45-f1e3-42e9-82c5-71c56eb6a8fb",
+    "964fad2c-3790-4f4d-b097-5b84c706f594"
   ],
   "snap-configs": {
     "position": {
