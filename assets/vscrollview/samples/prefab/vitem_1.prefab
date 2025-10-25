@@ -71,7 +71,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ui_8",
+    "_name": "icon",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -608,7 +608,6 @@
       "__id__": 0
     },
     "fileId": "53AQrnKhhEi7dCIJ699C/M",
-    "instance": null,
     "targetOverrides": null
   }
 ]

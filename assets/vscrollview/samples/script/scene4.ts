@@ -1,10 +1,13 @@
-import { _decorator, Component, Label, Node } from 'cc';
+import { _decorator, Component, Label, Node, Sprite, SpriteFrame } from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
 
-@ccclass('scene1')
-export class scene1 extends Component {
+@ccclass('scene4')
+export class scene4 extends Component {
+  @property([SpriteFrame])
+  spfs: SpriteFrame[] = [];
+
   @property(VirtualScrollView)
   vlist: VirtualScrollView | null = null;
 
@@ -18,6 +21,7 @@ export class scene1 extends Component {
     for (let i = 0; i < 50; i++) {
       this.data.push({
         data1: `第 ${i + 1} 项`,
+        icon: i % this.spfs.length,
       });
     }
 
@@ -25,8 +29,10 @@ export class scene1 extends Component {
     if (this.vlist) {
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
         const title = itemNode.getChildByName('title').getComponent(Label);
-
         title!.string = this.data[index].data1;
+
+        const sp = itemNode.getChildByName('icon').getComponent(Sprite);
+        sp.spriteFrame = this.spfs[this.data[index].icon];
       };
 
       this.vlist.onItemClickFn = (itemNode: Node, index: number) => {

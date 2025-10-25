@@ -2050,6 +2050,28 @@
     },
     "_enabled": true,
     "__prefab": null,
+    "spfs": [
+      {
+        "__uuid__": "cc38bf1c-64cd-4383-9a4c-38693c85f182@5ff58",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "cc38bf1c-64cd-4383-9a4c-38693c85f182@7e6d6",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "cc38bf1c-64cd-4383-9a4c-38693c85f182@8f788",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "cc38bf1c-64cd-4383-9a4c-38693c85f182@6a28c",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "cc38bf1c-64cd-4383-9a4c-38693c85f182@c9527",
+        "__expectedType__": "cc.SpriteFrame"
+      }
+    ],
     "vlist": {
       "__id__": 23
     },

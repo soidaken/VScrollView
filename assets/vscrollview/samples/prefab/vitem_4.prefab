@@ -39,8 +39,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": -187.764,
+      "y": -93.307,
       "z": 0
     },
     "_lrot": {
@@ -68,7 +68,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ui_8",
+    "_name": "icon",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -446,7 +446,6 @@
       "__id__": 0
     },
     "fileId": "53AQrnKhhEi7dCIJ699C/M",
-    "instance": null,
     "targetOverrides": null
   }
 ]

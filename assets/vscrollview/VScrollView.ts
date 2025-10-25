@@ -612,6 +612,110 @@ export class VirtualScrollView extends Component {
     }
   }
 
+  /**
+   * 更新指定索引的高度（用于动态内容，如聊天列表）
+   * @param index 要更新的索引
+   * @param newHeight 新的高度（可选，如果不提供则调用 getItemHeightFn）
+   */
+  public updateItemHeight(index: number, newHeight?: number) {
+    if (!this.useDynamicHeight) {
+      console.warn('[VScrollView] 只有不等高模式支持 updateItemHeight');
+      return;
+    }
+
+    if (index < 0 || index >= this.totalCount) {
+      console.warn(`[VScrollView] 索引 ${index} 超出范围`);
+      return;
+    }
+
+    // 获取新高度
+    let height = newHeight;
+    if (height === undefined) {
+      if (this.getItemHeightFn) {
+        height = this.getItemHeightFn(index);
+      } else {
+        console.error('[VScrollView] 没有提供 newHeight 参数，且未设置 getItemHeightFn');
+        return;
+      }
+    }
+
+    // 如果高度没变，不需要更新
+    if (this._itemHeights[index] === height) {
+      return;
+    }
+
+    // 更新高度数组
+    this._itemHeights[index] = height;
+
+    // 重新构建前缀和（从当前索引开始）
+    this._rebuildPrefixSumFrom(index);
+
+    // 重新布局可见节点
+    this._updateVisible(true);
+  }
+
+  /**
+   * 从指定索引开始重新计算前缀和
+   */
+  private _rebuildPrefixSumFrom(startIndex: number) {
+    if (startIndex === 0) {
+      // 从头开始重建
+      this._buildPrefixSum();
+      return;
+    }
+
+    // 从 startIndex 开始重新计算
+    let acc = this._prefixY[startIndex - 1] + this._itemHeights[startIndex - 1] + this.spacing;
+
+    for (let i = startIndex; i < this._itemHeights.length; i++) {
+      this._prefixY[i] = acc;
+      acc += this._itemHeights[i] + this.spacing;
+    }
+
+    // 更新 content 高度和边界
+    this._contentH = acc - this.spacing;
+    if (this._contentH < 0) this._contentH = 0;
+
+    this._contentTf.height = Math.max(this._contentH, this._viewportH);
+    this._boundsMin = 0;
+    this._boundsMax = Math.max(0, this._contentH - this._viewportH);
+  }
+
+  /**
+   * 批量更新多个索引的高度（性能优化版）
+   * @param updates 更新数组 [{index: number, height: number}, ...]
+   */
+  public updateItemHeights(updates: Array<{ index: number; height: number }>) {
+    if (!this.useDynamicHeight) {
+      console.warn('[VScrollView] 只有不等高模式支持 updateItemHeights');
+      return;
+    }
+
+    if (updates.length === 0) return;
+
+    // 找到最小的更新索引
+    let minIndex = this.totalCount;
+    let hasChange = false;
+
+    for (const { index, height } of updates) {
+      if (index < 0 || index >= this.totalCount) continue;
+
+      if (this._itemHeights[index] !== height) {
+        this._itemHeights[index] = height;
+        minIndex = Math.min(minIndex, index);
+        hasChange = true;
+      }
+    }
+
+    if (!hasChange) return;
+
+    // 从最小索引开始重建前缀和
+    this._rebuildPrefixSumFrom(minIndex);
+
+    // 重新布局
+    this._updateVisible(true);
+  }
+
   // =============== 对外 API ===============
   /** 列表并不引用和使用外部任何数据 */
   public refreshList(data: any[] | number) {
@@ -1014,12 +1118,33 @@ export class VirtualScrollView extends Component {
 
       newNode.active = true;
 
+      // 先渲染数据（可能改变节点高度）
+      this._updateItemClickHandler(newNode, idx);
+      if (this.renderItemFn) {
+        this.renderItemFn(newNode, idx);
+      }
+
+      // ✅ 渲染后检测高度变化（用于动态内容）
+      if (this.getItemHeightFn) {
+        // 如果提供了 getItemHeightFn，以它为准（外部管理高度）
+        const expectedHeight = this.getItemHeightFn(idx);
+        if (this._itemHeights[idx] !== expectedHeight) {
+          this.updateItemHeight(idx, expectedHeight);
+          return; // 高度更新后会重新调用 _updateVisible，避免重复布局
+        }
+      } else {
+        // 否则自动测量节点实际高度
+        const actualHeight = newNode.getComponent(UITransform)?.height || 100;
+        if (Math.abs(this._itemHeights[idx] - actualHeight) > 1) {
+          // 高度变化超过1像素，更新
+          this.updateItemHeight(idx, actualHeight);
+          return;
+        }
+      }
+
       // 使用前缀和计算位置
       const y = -this._prefixY[idx] - this._itemHeights[idx] / 2;
       newNode.setPosition(0, this.pixelAlign ? Math.round(y) : y);
-
-      this._updateItemClickHandler(newNode, idx);
-      if (this.renderItemFn) this.renderItemFn(newNode, idx);
 
       // 检查是否需要播放动画
       if (this._needAnimateIndices.has(idx)) {
