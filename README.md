@@ -2,6 +2,8 @@
 
 基于 CocosCreater 引擎编辑器的全新滚动组件和虚拟列表,目前仅支持 3.8.7 版本,2.4.x 版本在另一个仓库.
 
+[在线预览地址](https://soidaken.github.io/VSCrollView_SamplesPreView/)
+
 # 它有什么优势,适合什么场景
 
 - 使用极简,无论是编辑器中还是代码 API 使用,基本遵循上手即用,见名知意.
