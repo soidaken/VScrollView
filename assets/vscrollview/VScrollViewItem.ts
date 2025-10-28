@@ -10,6 +10,7 @@ import {
   Vec3,
   settings,
   Sorting2D,
+  RichText,
 } from 'cc';
 const { ccclass } = _decorator;
 
@@ -98,6 +99,7 @@ export class VScrollViewItem extends Component {
     for (let i = 0; i < labels.length; i++) {
       changeUISortingLayer(labels[i].node, 0, orderNumber);
       orderNumber++;
+
     }
   }
 

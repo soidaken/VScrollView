@@ -178,6 +178,9 @@ export default class UIButton extends Component {
     if (this.b_stopPropagation) {
       evt.propagationStopped = true;
     }
+    if (this.node_target) {
+      this._animatePressDown(this.node_target);
+    }
 
     if (!this.debounceTouchStartValid()) {
       return;
@@ -189,9 +192,6 @@ export default class UIButton extends Component {
     evt.getUILocation(this._touchStartPos);
 
     this._cbStarted && this._cbStarted(this, evt);
-    if (this.node_target) {
-      this._animatePressDown(this.node_target);
-    }
   }
 
   private _tmpTouchMoveRect: Rect = new Rect();
@@ -228,12 +228,12 @@ export default class UIButton extends Component {
     if (this.b_stopPropagation) {
       evt.propagationStopped = true;
     }
-
-    this._cbEnded && this._cbEnded(this, evt);
-
     if (this.node_target) {
       this._animateRelease(this.node_target);
     }
+
+    this._cbEnded && this._cbEnded(this, evt);
+
 
     if (this.clickSureValid() && this.clickCallbackValid()) {
       this._cbClicked && (await this._cbClicked(this, evt));
@@ -314,19 +314,19 @@ export default class UIButton extends Component {
     }
     Tween.stopAllByTarget(target);
     target.setScale(
-      this._initScale.x * this.scaleTarget,
-      this._initScale.y * this.scaleTarget,
+      this._initScale.x ,
+      this._initScale.y ,
       this._initScale.z
     );
 
-    tween(target)
-      // .bindNodeState(true)
-      .to(
-        this.duration / 1000,
-        { scale: new Vec3(this._initScale.x, this._initScale.y, this._initScale.z) },
-        { easing: 'smooth' }
-      )
-      .start();
+    // tween(target)
+    //   // .bindNodeState(true)
+    //   .to(
+    //     this.duration / 1000,
+    //     { scale: new Vec3(this._initScale.x, this._initScale.y, this._initScale.z) },
+    //     { easing: 'smooth' }
+    //   )
+    //   .start();
   }
 
   // ==================== Public Instance Methods ====================

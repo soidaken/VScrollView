@@ -5,6 +5,7 @@ import {
   instantiate,
   Label,
   Node,
+  RichText,
   Sprite,
   SpriteFrame,
   tween,
@@ -33,7 +34,7 @@ export class scene5 extends Component {
 
     // 模拟聊天数据
     for (let i = 0; i < 2; i++) {
-      const message = this.generateRandomMessage();
+      const message = this.generateRandomMessage(i === 1);
       this.chatData.push({
         player: i % 2 === 0 ? 1 : 2,
         message: message,
@@ -59,14 +60,20 @@ export class scene5 extends Component {
       // 渲染函数
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
         const data = this.chatData[index];
-        const label = itemNode.getChildByName('msg').getComponent(Label);
-        label.string = `第${index + 1}条消息: ${data.message}`;
-
+        let label = itemNode.getChildByName('msg').getComponent(Label);
+        if(label){
+          label.string = `第${index + 1}条消息: ${data.message}`;
+        }
+        let richlabel = itemNode.getChildByName('msg').getComponent(RichText) as RichText;
+        if(richlabel){
+          richlabel.string = `第${index + 1}条消息: ${data.message}`;
+        }
+        const tnode = label? label.node : richlabel.node;
         //需要根据真实渲染内容计算出子项正确高度
         //这个必须外部自己提供,因为组件的高度你可能有自己留白的需求,比如下面的上下各留20px空白
         const uit = itemNode.getComponent(UITransform);
-        label.updateRenderData();
-        uit.height = label.node.getComponent(UITransform).height + 20 * 2;
+        label&&label.updateRenderData();
+        uit.height = tnode.getComponent(UITransform).height + 20 * 2;
         // console.log(
         //   `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
         // );
@@ -114,7 +121,7 @@ export class scene5 extends Component {
   addNewMessage(playerId: number, message?: string) {
     this.chatData.push({
       player: playerId,
-      message: this.generateRandomMessage(),
+      message: this.generateRandomMessage(playerId ===2),
       calculatedHeight: 0,
     });
 
@@ -136,7 +143,22 @@ export class scene5 extends Component {
   }
 
   // 生成随机消息
-  private generateRandomMessage(): string {
+  private generateRandomMessage(isRichText: boolean = false): string {
+    if (isRichText) {
+    const richTextMessages = [
+      '<color=#ff0000>红色</color>文字测试',
+      '<color=#00ff00>绿色</color>加粗<b>粗体文本</b>',
+      '<color=#0000ff>蓝色</color>斜体<i>斜体文本</i><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+      '<color=#ff00ff>紫色</color>下划线<u>下划线文本</u><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+      '<b>粗体</b><i>斜体</i><u>下划线</u>混合样式',
+      '<color=#ffa500>橙色</color>字体大小<size=30>大号字</size><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+      '<color=#00ffff>青色</color>今天天气不错<color=#ff0000>出去走走</color><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+      '<b>重要通知:</b> <color=#ff0000>系统将在今晚维护</color>',
+      '<color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+      '<size=40><color=#ff0000>大</color></size><size=20><color=#00ff00>小</color></size>字体混合'
+    ];
+    return richTextMessages[Math.floor(Math.random() * richTextMessages.length)];
+  }
     const shortMessages = [
       '好的',
       '收到',

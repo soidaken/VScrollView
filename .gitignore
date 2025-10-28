@@ -2,6 +2,7 @@
 library/
 temp/
 local/
+profiles/
 
 # === 构建输出 ===
 build/

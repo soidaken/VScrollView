@@ -25,11 +25,10 @@ export class scene1 extends Component {
     // 设置虚拟列表数据
     if (this.vlist) {
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
-        const title = itemNode.getChildByName('title').getComponent(Label);
-        const time = itemNode.getChildByName('time').getComponent(Label);
-
-        title!.string = this.data[index].data1;
-        time!.string = this.data[index].data2;
+        // const title = itemNode.getChildByName('title').getComponent(Label);
+        // const time = itemNode.getChildByName('time').getComponent(Label);
+        // title!.string = this.data[index].data1;
+        // time!.string = this.data[index].data2;
       };
 
       this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
