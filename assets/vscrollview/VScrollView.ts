@@ -304,6 +304,9 @@ export class VirtualScrollView extends Component {
   // 新增：标记哪些索引需要播放动画
   private _needAnimateIndices: Set<number> = new Set();
 
+  //初始分层设置标记
+  private _initSortLayerFlag: boolean = true;
+
   private _getContentNode(): Node {
     if (!this.content) {
       console.warn(`[VirtualScrollView] :${this.node.name} 请在属性面板绑定 content 容器节点`);
@@ -928,13 +931,23 @@ export class VirtualScrollView extends Component {
     this._scrollToPosition(targetY, animate);
   }
 
+  //以防初始化时候调用此接口子项组件还未初始化,先标记
   public onOffSortLayer(onoff: boolean) {
+    this._initSortLayerFlag = onoff;
+    this._onOffSortLayerOperation();
+  }
+
+  //具体操作
+  private _onOffSortLayerOperation(){
     for (const element of this._slotNodes) {
       const sitem = element.getComponent(VScrollViewItem);
-      if (onoff) sitem.onSortLayer();
-      else sitem.offSortLayer();
+      if(sitem){
+        if (this._initSortLayerFlag) sitem.onSortLayer();
+        else sitem.offSortLayer();
+      }
     }
   }
+
 
   /** 立即跳转到指定位置（无动画） */
   private _flashToPosition(targetY: number) {
@@ -1343,8 +1356,10 @@ export class VirtualScrollView extends Component {
     if (!itemScript) {
       itemScript = node.addComponent(VScrollViewItem);
     }
-    itemScript.useItemClickEffect = this.useItemClickEffect;
 
+    this._initSortLayerFlag ? itemScript.onSortLayer() : itemScript.offSortLayer();
+    itemScript.useItemClickEffect = this.useItemClickEffect;
+    
     if (!itemScript.onClickCallback) {
       itemScript.onClickCallback = (idx: number) => {
         if (this.onItemClickFn) {

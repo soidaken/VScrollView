@@ -595,7 +595,7 @@
     "content": null,
     "useVirtualList": true,
     "itemPrefab": {
-      "__uuid__": "c40c03d3-07b0-4823-bf08-dd183f9afe46",
+      "__uuid__": "d9a8c59c-c0e2-4d67-b447-c11d76418f6e",
       "__expectedType__": "cc.Prefab"
     },
     "useItemClickEffect": true,

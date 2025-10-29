@@ -78,7 +78,7 @@ export class VScrollViewItem extends Component {
   }
 
   protected start(): void {
-    this.onSortLayer();
+    // this.onSortLayer();
   }
 
   onDestroy() {
@@ -109,6 +109,9 @@ export class VScrollViewItem extends Component {
     const labels = this.node.getComponentsInChildren(Label);
     for (let i = 0; i < labels.length; i++) {
       changeUISortingLayer(labels[i].node, 0, orderNumber);
+      // const item = labels[i];
+      // const sort2d = item.node.getComponent(Sorting2D);
+      // sort2d && (sort2d.enabled = false);
       // orderNumber++;
     }
   }

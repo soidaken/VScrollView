@@ -11,7 +11,7 @@ export class scene1 extends Component {
   //列表数据
   private data: any[] = [];
 
-  private renderOptOnOff = true;
+  private renderOptOnOff = false;
 
   onLoad() {
     // 模拟数据
@@ -37,7 +37,12 @@ export class scene1 extends Component {
       };
 
       this.vlist.refreshList(this.data);
+
+      this.vlist.onOffSortLayer(this.renderOptOnOff); 
+
     }
+
+    
 
     UIButton.onClicked(this.node.getChildByName('btn1'), (button: UIButton) => {
       this.data[1].data1 = '【已修改】重要通知2';
