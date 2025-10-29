@@ -38,7 +38,7 @@ export class scene1 extends Component {
 
       this.vlist.refreshList(this.data);
 
-      this.vlist.onOffSortLayer(this.renderOptOnOff); 
+      // this.vlist.onOffSortLayer(this.renderOptOnOff);  
 
     }
 
