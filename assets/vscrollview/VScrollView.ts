@@ -1023,11 +1023,14 @@ export class VirtualScrollView extends Component {
     }
   }
 
+  //避免每次都创建临时对象
+  private _tmpMoveVec2 = new Vec2();
   private _onMove(e: EventTouch) {
     // 确保在触摸状态才处理
     if (!this._isTouching) return;
 
-    const dy = e.getDeltaY();
+	// const dy = e.getDeltaY();
+	const dy = e.getUIDelta(this._tmpMoveVec2).y;
     let y = this.content!.position.y + dy;
 
     if (this.pixelAlign) y = Math.round(y);
