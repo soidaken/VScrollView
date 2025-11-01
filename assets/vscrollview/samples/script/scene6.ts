@@ -3,8 +3,8 @@ import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
 
-@ccclass('scene1')
-export class scene1 extends Component {
+@ccclass('scene6')
+export class scene6 extends Component {
   @property(VirtualScrollView)
   vlist: VirtualScrollView | null = null;
 
@@ -16,7 +16,7 @@ export class scene1 extends Component {
   onLoad() {
     game.frameRate = 120;
     // 模拟数据
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 20; i++) {
       this.data.push({
         data1: `重要通知${i + 1}`,
         data2: `2025.10.${1 + i}`,

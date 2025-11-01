@@ -43,10 +43,10 @@ export class scene5 extends Component {
     }
 
     if (this.vlist) {
-      // ✅ 提供高度获取函数
-      this.vlist.getItemHeightFn = (index: number) => {
-        return this.chatData[index].calculatedHeight;
-      };
+      //可以外部自己维护每个子项的高度数据,如果你不想维护,只要及时更新子项根节点尺寸即可.
+      // this.vlist.getItemHeightFn = (index: number) => {
+      //   return this.chatData[index].calculatedHeight;
+      // };
 
       this.vlist.getItemTypeIndexFn = (index: number) => {
         const data = this.chatData[index];
@@ -60,27 +60,36 @@ export class scene5 extends Component {
       // 渲染函数
       this.vlist.renderItemFn = (itemNode: Node, index: number) => {
         const data = this.chatData[index];
+
         let label = itemNode.getChildByName('msg').getComponent(Label);
-        if(label){
+        if (label) {
           label.string = `第${index + 1}条消息: ${data.message}`;
         }
         let richlabel = itemNode.getChildByName('msg').getComponent(RichText) as RichText;
-        if(richlabel){
+        if (richlabel) {
           richlabel.string = `第${index + 1}条消息: ${data.message}`;
         }
-        const tnode = label? label.node : richlabel.node;
+
+        label && label.updateRenderData();
+        const tnode = label ? label.node : richlabel.node;
+
+        const uitText = tnode.getComponent(UITransform);
+        const bg = itemNode.getChildByName('bg');
+        const uitBg = bg.getComponent(UITransform);
+        uitBg.height = uitText.height + 20 * 2;
+
         //需要根据真实渲染内容计算出子项正确高度
         //这个必须外部自己提供,因为组件的高度你可能有自己留白的需求,比如下面的上下各留20px空白
         const uit = itemNode.getComponent(UITransform);
-        label&&label.updateRenderData();
-        uit.height = tnode.getComponent(UITransform).height + 20 * 2;
+        uit.height = uitBg.height;
         // console.log(
         //   `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
         // );
-        this.chatData[index].calculatedHeight = uit.height;
-        this.vlist.updateItemHeight(index, uit.height);
+        // this.chatData[index].calculatedHeight = uit.height;
+        // this.vlist.updateItemHeight(index, uit.height);
       };
 
+      //子项新加入的出现动画
       this.vlist.playItemAppearAnimationFn = (itemNode: Node, index: number) => {
         itemNode.setScale(0, 0);
         tween(itemNode)
@@ -121,7 +130,7 @@ export class scene5 extends Component {
   addNewMessage(playerId: number, message?: string) {
     this.chatData.push({
       player: playerId,
-      message: this.generateRandomMessage(playerId ===2),
+      message: this.generateRandomMessage(playerId === 2),
       calculatedHeight: 0,
     });
 
@@ -145,20 +154,20 @@ export class scene5 extends Component {
   // 生成随机消息
   private generateRandomMessage(isRichText: boolean = false): string {
     if (isRichText) {
-    const richTextMessages = [
-      '<color=#ff0000>红色</color>文字测试',
-      '<color=#00ff00>绿色</color>加粗<b>粗体文本</b>',
-      '<color=#0000ff>蓝色</color>斜体<i>斜体文本</i><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
-      '<color=#ff00ff>紫色</color>下划线<u>下划线文本</u><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
-      '<b>粗体</b><i>斜体</i><u>下划线</u>混合样式',
-      '<color=#ffa500>橙色</color>字体大小<size=30>大号字</size><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
-      '<color=#00ffff>青色</color>今天天气不错<color=#ff0000>出去走走</color><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
-      '<b>重要通知:</b> <color=#ff0000>系统将在今晚维护</color>',
-      '<color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
-      '<size=40><color=#ff0000>大</color></size><size=20><color=#00ff00>小</color></size>字体混合'
-    ];
-    return richTextMessages[Math.floor(Math.random() * richTextMessages.length)];
-  }
+      const richTextMessages = [
+        '<color=#ff0000>红色</color>文字测试',
+        '<color=#00ff00>绿色</color>加粗<b>粗体文本</b>',
+        '<color=#0000ff>蓝色</color>斜体<i>斜体文本</i><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+        '<color=#ff00ff>紫色</color>下划线<u>下划线文本</u><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+        '<b>粗体</b><i>斜体</i><u>下划线</u>混合样式',
+        '<color=#ffa500>橙色</color>字体大小<size=30>大号字</size><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+        '<color=#00ffff>青色</color>今天天气不错<color=#ff0000>出去走走</color><color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+        '<b>重要通知:</b> <color=#ff0000>系统将在今晚维护</color>',
+        '<color=#ffff00>黄色背景</color>文字<color=#00ff00>绿色文字</color>',
+        '<size=40><color=#ff0000>大</color></size><size=20><color=#00ff00>小</color></size>字体混合',
+      ];
+      return richTextMessages[Math.floor(Math.random() * richTextMessages.length)];
+    }
     const shortMessages = [
       '好的',
       '收到',

@@ -594,11 +594,12 @@
     "__prefab": null,
     "content": null,
     "useVirtualList": true,
+    "direction": 0,
     "itemPrefab": {
       "__uuid__": "d9a8c59c-c0e2-4d67-b447-c11d76418f6e",
       "__expectedType__": "cc.Prefab"
     },
-    "useItemClickEffect": true,
+    "useDynamicSize": true,
     "useDynamicHeight": true,
     "itemPrefabs": [
       {
@@ -614,8 +615,8 @@
         "__expectedType__": "cc.Prefab"
       }
     ],
-    "columns": 1,
-    "columnSpacing": 8,
+    "gridCount": 1,
+    "gridSpacing": 8,
     "spacing": 8,
     "totalCount": 100,
     "buffer": 0,

@@ -16,7 +16,7 @@ export class scene2 extends Component {
   onLoad() {
     game.frameRate = 120;
     // 模拟数据
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       this.data.push({
         data1: `第${i + 1}条数据`,
         data2: `2025.10.${1 + i}`,

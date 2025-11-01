@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Label, Node, Scene } from 'cc';
+import { _decorator, Component, director, game, Label, Node, Scene } from 'cc';
 import UIButton from './UIButton';
 import { UIPersist } from './UIPersist';
 const { ccclass, property } = _decorator;
@@ -7,6 +7,10 @@ const { ccclass, property } = _decorator;
 export class scene0 extends Component {
   @property([Node])
   btn_nodes: Node[] = [];
+
+  protected onLoad(): void {
+    game.frameRate = 120;
+  }
 
   protected start(): void {
     UIPersist.back.active = false;
