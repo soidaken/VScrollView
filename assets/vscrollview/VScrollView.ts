@@ -81,10 +81,33 @@ export type OnItemClickFn = (node: Node, index: number) => void;
 export type PlayItemAppearAnimationFn = (node: Node, index: number) => void;
 export type GetItemHeightFn = (index: number) => number;
 export type GetItemTypeIndexFn = (index: number) => number;
+// 刷新状态回调
+export type OnRefreshStateChangeFn = (state: RefreshState, offset: number) => void;
+// 加载更多状态回调
+export type OnLoadMoreStateChangeFn = (state: LoadMoreState, offset: number) => void;
+
 
 export enum ScrollDirection {
   VERTICAL = 0,
   HORIZONTAL = 1,
+}
+
+// 添加刷新状态枚举
+export enum RefreshState {
+  IDLE = 0,           // 空闲状态
+  PULLING = 1,        // 正在拉动（未达到触发阈值）
+  READY = 2,          // 达到触发阈值，松手即可刷新
+  REFRESHING = 3,     // 正在刷新中
+  COMPLETE = 4,       // 刷新完成
+}
+
+export enum LoadMoreState {
+  IDLE = 0,           // 空闲状态
+  PULLING = 1,        // 正在上拉（未达到触发阈值）
+  READY = 2,          // 达到触发阈值，松手即可加载
+  LOADING = 3,        // 正在加载中
+  COMPLETE = 4,       // 加载完成
+  NO_MORE = 5,        // 没有更多数据
 }
 
 @ccclass('VirtualScrollView')
@@ -194,6 +217,70 @@ export class VirtualScrollView extends Component {
   })
   public buffer: number = 1;
 
+
+    @property({
+    displayName: '启用下拉刷新',
+    tooltip: '是否启用下拉刷新功能',
+  })
+  public enablePullRefresh: boolean = false;
+
+  @property({
+    displayName: '===下拉触发距离',
+    tooltip: '下拉多少距离触发刷新（像素）',
+    range: [50, 500, 10],
+    visible(this: VirtualScrollView) {
+      return this.enablePullRefresh;
+    },
+  })
+  public pullRefreshThreshold: number = 100;
+
+  @property({
+    displayName: '===下拉最大距离',
+    tooltip: '下拉的最大阻尼距离（像素）',
+    range: [100, 1000, 10],
+    visible(this: VirtualScrollView) {
+      return this.enablePullRefresh;
+    },
+  })
+  public pullRefreshMaxOffset: number = 150;
+
+  @property({
+    displayName: '启用上拉加载',
+    tooltip: '是否启用上拉加载更多功能',
+  })
+  public enableLoadMore: boolean = false;
+
+  @property({
+    displayName: '===上拉触发距离',
+    tooltip: '距离底部多少距离触发加载（像素）',
+    range: [50, 500, 10],
+    visible(this: VirtualScrollView) {
+      return this.enableLoadMore;
+    },
+  })
+  public loadMoreThreshold: number = 100;
+
+  @property({
+    displayName: '===上拉最大距离',
+    tooltip: '上拉的最大阻尼距离（像素）',
+    range: [100, 1000, 10],
+    visible(this: VirtualScrollView) {
+      return this.enableLoadMore;
+    },
+  })
+  public loadMoreMaxOffset: number = 150;
+
+  @property({
+    displayName: '拉动阻尼系数',
+    tooltip: '拉动时的阻尼系数（0-1），越小越难拉',
+    range: [0.1, 1, 0.05],
+    visible(this: VirtualScrollView) {
+      return this.enablePullRefresh || this.enableLoadMore;
+    },
+  })
+  public pullDampingRate: number = 0.5;
+
+
   @property({ displayName: '像素对齐', tooltip: '是否启用像素对齐' })
   public pixelAlign: boolean = true;
 
@@ -228,6 +315,8 @@ export class VirtualScrollView extends Component {
   public playItemAppearAnimationFn: PlayItemAppearAnimationFn | null = null;
   public getItemHeightFn: GetItemHeightFn | null = null;
   public getItemTypeIndexFn: GetItemTypeIndexFn | null = null;
+  public onRefreshStateChangeFn: OnRefreshStateChangeFn | null = null;
+  public onLoadMoreStateChangeFn: OnLoadMoreStateChangeFn | null = null;
 
   private _viewportSize = 0;
   private _contentSize = 0;
@@ -248,6 +337,15 @@ export class VirtualScrollView extends Component {
   private _initSortLayerFlag: boolean = true;
   private _scrollTween: any = null;
   private _tmpMoveVec2 = new Vec2();
+
+    // 私有状态变量
+  private _refreshState: RefreshState = RefreshState.IDLE;
+  private _loadMoreState: LoadMoreState = LoadMoreState.IDLE;
+  private _pullOffset: number = 0;      // 当前下拉偏移量
+  private _loadOffset: number = 0;      // 当前上拉偏移量
+  private _isRefreshing: boolean = false;
+  private _isLoadingMore: boolean = false;
+  private _hasMore: boolean = true;     // 是否还有更多数据
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -523,15 +621,23 @@ export class VirtualScrollView extends Component {
     let pos = this._getContentMainPos();
     let a = 0;
 
-    // 修改：需要判断哪个是最小边界，哪个是最大边界
     const minBound = Math.min(this._boundsMin, this._boundsMax);
     const maxBound = Math.max(this._boundsMin, this._boundsMax);
 
-    if (pos < minBound) {
-      // 超出最小边界（纵向：下方；横向：左方）
+    // 处理刷新/加载状态
+    if (this._isRefreshing && this._refreshState === RefreshState.REFRESHING) {
+      // 刷新中，保持在刷新位置
+      const refreshPos = this._isVertical() ? -this.pullRefreshThreshold : this.pullRefreshThreshold;
+      a = -this.springK * (pos - refreshPos) - this.springC * this._velocity;
+    } else if (this._isLoadingMore && this._loadMoreState === LoadMoreState.LOADING) {
+      // 加载中，保持在加载位置
+      const loadPos = this._isVertical() 
+        ? this._boundsMax + this.loadMoreThreshold 
+        : this._boundsMin - this.loadMoreThreshold;
+      a = -this.springK * (pos - loadPos) - this.springC * this._velocity;
+    } else if (pos < minBound) {
       a = -this.springK * (pos - minBound) - this.springC * this._velocity;
     } else if (pos > maxBound) {
-      // 超出最大边界（纵向：上方；横向：右方）
       a = -this.springK * (pos - maxBound) - this.springC * this._velocity;
     } else {
       if (this.useIOSDecelerationCurve) {
@@ -543,6 +649,7 @@ export class VirtualScrollView extends Component {
         this._velocity *= Math.exp(-this.inertiaDampK * dt);
       }
     }
+    
     this._velocity += a * dt;
     if (Math.abs(this._velocity) < this.velocitySnap && a === 0) this._velocity = 0;
     if (this._velocity !== 0) {
@@ -841,11 +948,71 @@ export class VirtualScrollView extends Component {
     if (!this._isTouching) return;
     const uiDelta = e.getUIDelta(this._tmpMoveVec2);
     const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
-    let pos = this._getContentMainPos() + delta;
+    let pos = this._getContentMainPos();
+    const minBound = Math.min(this._boundsMin, this._boundsMax);
+    const maxBound = Math.max(this._boundsMin, this._boundsMax);
+
+    // 计算是否需要下拉刷新或上拉加载
+    let finalDelta = delta;
+    let isPullingRefresh = false;
+    let isPullingLoadMore = false;
+
+    // console.log(`delta: ${delta}, pos: ${pos}, minBound: ${minBound}, maxBound: ${maxBound}`);
+
+    if (this.enablePullRefresh && !this._isRefreshing) {
+      // 纵向：顶部下拉（pos < minBound 且向下拉）
+      // 横向：左侧右拉（pos > maxBound 且向右拉）
+      const atTopBound = this._isVertical() ? (pos <= minBound) : (pos >= maxBound);
+      const pullingDown = this._isVertical() ? (delta < 0) : (delta > 0);
+      
+      if (atTopBound && pullingDown) {
+        isPullingRefresh = true;
+        const overOffset = this._isVertical() ? (minBound - pos) : (pos - maxBound);
+        const resistance = 1 - Math.min(overOffset / this.pullRefreshMaxOffset, 1) * (1 - this.pullDampingRate);
+        finalDelta = delta * resistance;
+        this._pullOffset = Math.min(overOffset + Math.abs(finalDelta), this.pullRefreshMaxOffset);
+        // console.log(`[VScrollView] 下拉偏移: ${this._pullOffset}`);
+        
+        // 更新刷新状态
+        if (this._pullOffset >= this.pullRefreshThreshold) {
+          this._updateRefreshState(RefreshState.READY, this._pullOffset);
+        } else {
+          this._updateRefreshState(RefreshState.PULLING, this._pullOffset);
+        }
+      }
+    }
+
+    if (this.enableLoadMore && !this._isLoadingMore && this._hasMore) {
+      // 纵向：底部上拉（pos > maxBound 且向上拉）
+      // 横向：右侧左拉（pos < minBound 且向左拉）
+      const atBottomBound = this._isVertical() ? (pos >= maxBound) : (pos <= minBound);
+      const pullingUp = this._isVertical() ? (delta > 0) : (delta < 0);
+      
+      if (atBottomBound && pullingUp) {
+        isPullingLoadMore = true;
+        const overOffset = this._isVertical() ? (pos - maxBound) : (minBound - pos);
+        const resistance = 1 - Math.min(overOffset / this.loadMoreMaxOffset, 1) * (1 - this.pullDampingRate);
+        finalDelta = delta * resistance;
+        this._loadOffset = Math.min(overOffset + Math.abs(finalDelta), this.loadMoreMaxOffset);
+        
+        // console.log(`[VScrollView] 上拉偏移: ${this._loadOffset}`);
+        // 更新加载状态
+        if (this._loadOffset >= this.loadMoreThreshold) {
+          this._updateLoadMoreState(LoadMoreState.READY, this._loadOffset);
+        } else {
+          this._updateLoadMoreState(LoadMoreState.PULLING, this._loadOffset);
+        }
+      }
+    }
+
+    // 应用位置变化
+    pos += finalDelta;
     if (this.pixelAlign) pos = Math.round(pos);
     this._setContentMainPos(pos);
+
+    // 记录速度采样
     const t = performance.now() / 1000;
-    this._velSamples.push({ t, delta });
+    this._velSamples.push({ t, delta: finalDelta });
     const t0 = t - this.velocityWindow;
     while (this._velSamples.length && this._velSamples[0].t < t0) this._velSamples.shift();
     if (this.useVirtualList) this._updateVisible(false);
@@ -854,6 +1021,32 @@ export class VirtualScrollView extends Component {
   private _onUp(e?: EventTouch) {
     if (!this._isTouching) return;
     this._isTouching = false;
+
+    // 检查是否触发刷新
+    if (this._refreshState === RefreshState.READY && !this._isRefreshing) {
+      this._triggerRefresh();
+      this._velSamples.length = 0;
+      return;
+    }
+
+    // 检查是否触发加载
+    if (this._loadMoreState === LoadMoreState.READY && !this._isLoadingMore) {
+      this._triggerLoadMore();
+      this._velSamples.length = 0;
+      return;
+    }
+
+    // 重置状态
+    if (this._refreshState !== RefreshState.REFRESHING) {
+      this._pullOffset = 0;
+      this._updateRefreshState(RefreshState.IDLE, 0);
+    }
+    if (this._loadMoreState !== LoadMoreState.LOADING) {
+      this._loadOffset = 0;
+      this._updateLoadMoreState(LoadMoreState.IDLE, 0);
+    }
+
+    // 计算速度
     if (this._velSamples.length >= 2) {
       let sum = 0;
       let dtSum = 0;
@@ -877,6 +1070,93 @@ export class VirtualScrollView extends Component {
     }
     this._velSamples.length = 0;
   }
+
+
+  // 更新刷新状态
+  private _updateRefreshState(state: RefreshState, offset: number) {
+    if (this._refreshState === state) return;
+    this._refreshState = state;
+    if (this.onRefreshStateChangeFn) {
+      this.onRefreshStateChangeFn(state, offset);
+    }
+  }
+
+  // 更新加载状态
+  private _updateLoadMoreState(state: LoadMoreState, offset: number) {
+    if (this._loadMoreState === state) return;
+    this._loadMoreState = state;
+    if (this.onLoadMoreStateChangeFn) {
+      this.onLoadMoreStateChangeFn(state, offset);
+    }
+  }
+
+  // 触发刷新
+  private _triggerRefresh() {
+    this._isRefreshing = true;
+    this._velocity = 0;
+    this._updateRefreshState(RefreshState.REFRESHING, this.pullRefreshThreshold);
+  }
+
+  // 触发加载更多
+  private _triggerLoadMore() {
+    this._isLoadingMore = true;
+    this._velocity = 0;
+    this._updateLoadMoreState(LoadMoreState.LOADING, this.loadMoreThreshold);
+  }
+
+
+
+  /**
+   * 完成刷新（外部调用）
+   * @param success 是否刷新成功
+   */
+  public finishRefresh(success: boolean = true) {
+    if (!this._isRefreshing) return;
+    this._isRefreshing = false;
+    this._pullOffset = 0;
+    this._updateRefreshState(success ? RefreshState.COMPLETE : RefreshState.IDLE, 0);
+    
+    // 延迟重置到 IDLE 状态
+    this.scheduleOnce(() => {
+      if (this._refreshState === RefreshState.COMPLETE) {
+        this._updateRefreshState(RefreshState.IDLE, 0);
+      }
+    }, 0.3);
+  }
+
+  /**
+   * 完成加载更多（外部调用）
+   * @param hasMore 是否还有更多数据
+   */
+  public finishLoadMore(hasMore: boolean = true) {
+    if (!this._isLoadingMore) return;
+    this._isLoadingMore = false;
+    this._loadOffset = 0;
+    this._hasMore = hasMore;
+    
+    if (!hasMore) {
+      this._updateLoadMoreState(LoadMoreState.NO_MORE, 0);
+    } else {
+      this._updateLoadMoreState(LoadMoreState.COMPLETE, 0);
+      // 延迟重置到 IDLE 状态
+      this.scheduleOnce(() => {
+        if (this._loadMoreState === LoadMoreState.COMPLETE) {
+          this._updateLoadMoreState(LoadMoreState.IDLE, 0);
+        }
+      }, 0.3);
+    }
+  }
+
+  /**
+   * 重置加载更多状态（当数据清空或重新加载时调用）
+   */
+  public resetLoadMoreState() {
+    this._hasMore = true;
+    this._isLoadingMore = false;
+    this._loadOffset = 0;
+    this._updateLoadMoreState(LoadMoreState.IDLE, 0);
+  }
+
 
   private _updateVisible(force: boolean) {
     if (!this.useVirtualList) return;
