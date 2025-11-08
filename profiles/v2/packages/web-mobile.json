@@ -53,6 +53,14 @@
         {
           "url": "db://assets/vscrollview/samples/场景7-不等宽(横向).scene",
           "uuid": "ed15f731-755e-4423-bac3-68b6b04a0912"
+        },
+        {
+          "url": "db://assets/vscrollview/samples/场景8-邮件列表案例.scene",
+          "uuid": "d2795dc5-da1f-4fb5-95a8-43e9f8a6b34f"
+        },
+        {
+          "url": "db://assets/vscrollview/samples/场景9-不等高列表(子项点击展开).scene",
+          "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
         }
       ]
     },
