@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.SceneAsset",
-    "_name": "场景2-不等高列表",
+    "_name": "场景11-不等高列表(子项点击展开2)",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -11,7 +11,7 @@
   },
   {
     "__type__": "cc.Scene",
-    "_name": "场景2-不等高列表",
+    "_name": "场景11-不等高列表(子项点击展开2)",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -56,7 +56,7 @@
     "_globals": {
       "__id__": 57
     },
-    "_id": "4a70cf7e-a185-4d21-8e5c-7267b1ffa065"
+    "_id": "723efeb2-1a3d-4450-b758-69fb04c082e2"
   },
   {
     "__type__": "cc.Node",
@@ -603,15 +603,11 @@
     "useDynamicHeight": true,
     "itemPrefabs": [
       {
-        "__uuid__": "d9a8c59c-c0e2-4d67-b447-c11d76418f6e",
+        "__uuid__": "14d59b5c-d62a-46c6-8320-855c1a383762",
         "__expectedType__": "cc.Prefab"
       },
       {
-        "__uuid__": "cba7011d-a26e-4bd9-b25a-06cc38d6c26e",
-        "__expectedType__": "cc.Prefab"
-      },
-      {
-        "__uuid__": "4bc57ce5-cac6-45a0-a130-260a69e40e24",
+        "__uuid__": "9d912e8d-6ea5-4ea9-ae3b-2a88e48f3efb",
         "__expectedType__": "cc.Prefab"
       }
     ],
@@ -1809,7 +1805,7 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 189.34,
+      "width": 376.02,
       "height": 30
     },
     "_anchorPoint": {
@@ -1839,7 +1835,7 @@
       "b": 255,
       "a": 255
     },
-    "_string": "场景2-不等高列表",
+    "_string": "场景11-不等高列表(子项点击展开2)",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 24,
@@ -2195,7 +2191,7 @@
     "_id": "26ch9K4+1K8LtXBI4TpWoP"
   },
   {
-    "__type__": "3b8f4aFPcZAyZResgK0XyEC",
+    "__type__": "b4d3eIJpGBHKqMvjH/gCxAh",
     "_name": "",
     "_objFlags": 0,
     "__editorExtras__": {},
@@ -2207,7 +2203,7 @@
     "vlist": {
       "__id__": 15
     },
-    "_id": "9f2ja+CgZLj4mDS5b9+O3Y"
+    "_id": "7eFSkk/KlGiquUtN6tSXAy"
   },
   {
     "__type__": "cc.PrefabInfo",
