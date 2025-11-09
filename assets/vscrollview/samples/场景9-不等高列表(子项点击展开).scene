@@ -603,7 +603,7 @@
     "useDynamicHeight": true,
     "itemPrefabs": [
       {
-        "__uuid__": "14d59b5c-d62a-46c6-8320-855c1a383762",
+        "__uuid__": "4593def0-463d-4558-98a2-d77d423e27d8",
         "__expectedType__": "cc.Prefab"
       }
     ],
@@ -612,6 +612,13 @@
     "spacing": 8,
     "totalCount": 100,
     "buffer": 0,
+    "enablePullRefresh": false,
+    "pullRefreshThreshold": 100,
+    "pullRefreshMaxOffset": 150,
+    "enableLoadMore": false,
+    "loadMoreThreshold": 100,
+    "loadMoreMaxOffset": 150,
+    "pullDampingRate": 0.5,
     "pixelAlign": true,
     "inertiaDampK": 1,
     "springK": 160,

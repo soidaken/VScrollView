@@ -31,6 +31,10 @@
           "uuid": "b0e61247-4e0e-4111-8cbf-8631439e28c0"
         },
         {
+          "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
+          "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
+        },
+        {
           "url": "db://assets/vscrollview/samples/场景2-不等高列表.scene",
           "uuid": "4a70cf7e-a185-4d21-8e5c-7267b1ffa065"
         },
@@ -61,6 +65,10 @@
         {
           "url": "db://assets/vscrollview/samples/场景9-不等高列表(子项点击展开).scene",
           "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
+        },
+        {
+          "url": "db://assets/vscrollview/samples/场景11-不等高列表(子项点击展开2).scene",
+          "uuid": "723efeb2-1a3d-4450-b758-69fb04c082e2"
         }
       ]
     },
