@@ -152,7 +152,16 @@ export class VirtualScrollView extends Component {
     displayName: '不等高模式（已废弃,仅保持兼容）',
     tooltip: '启用不等高模式（已废弃,仅保持兼容）',
   })
-  public useDynamicHeight: boolean = false;
+  public useDynamicHeight: boolean = false;0
+
+  @property({
+    displayName: '自动居中布局',
+    tooltip: '当子项数量少于行/列数时，自动居中显示（适用于等大小模式）',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList && !this.useDynamicSize;
+    }
+  })
+  public autoCenter: boolean = false;
 
   @property({
     type: [Prefab],
@@ -1299,45 +1308,85 @@ export class VirtualScrollView extends Component {
         this._needAnimateIndices.delete(idx);
       }
     } else {
-      if (!node) return;
-      node.active = true;
-      const stride = this.itemMainSize + this.spacing;
-      const line = Math.floor(idx / this.gridCount);
-      const gridPos = idx % this.gridCount;
-      const uit = node.getComponent(UITransform);
-      const itemStart = line * stride;
-      if (this._isVertical()) {
-        const anchorY = uit?.anchorY ?? 0.5;
-        const anchorOffsetY = this.itemMainSize * (1 - anchorY);
-        const nodeY = itemStart + anchorOffsetY;
-        const y = -nodeY;
-        const totalWidth = this.gridCount * this.itemCrossSize + (this.gridCount - 1) * this.gridSpacing;
-        const x = gridPos * (this.itemCrossSize + this.gridSpacing) - totalWidth / 2 + this.itemCrossSize / 2;
-        node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
-        if (uit) {
-          uit.width = this.itemCrossSize;
-          uit.height = this.itemMainSize;
-        }
-      } else {
-        const anchorX = uit?.anchorX ?? 0.5;
-        const anchorOffsetX = this.itemMainSize * anchorX;
-        const nodeX = itemStart + anchorOffsetX;
-        const x = nodeX;
-        const totalHeight = this.gridCount * this.itemCrossSize + (this.gridCount - 1) * this.gridSpacing;
-        const y = totalHeight / 2 - gridPos * (this.itemCrossSize + this.gridSpacing) - this.itemCrossSize / 2;
-        node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
-        if (uit) {
-          uit.width = this.itemMainSize;
-          uit.height = this.itemCrossSize;
-        }
+      
+    // 等大小模式
+    if (!node) return;
+    node.active = true;
+    const stride = this.itemMainSize + this.spacing;
+    const line = Math.floor(idx / this.gridCount);
+    const gridPos = idx % this.gridCount;
+    const uit = node.getComponent(UITransform);
+    const itemStart = line * stride;
+
+    // 1. 计算全局偏移（视口居中）- 只在内容小于视口时生效
+    let globalOffset = 0;
+    let shouldAutoCenter = false; // 是否应该居中
+    if (this.autoCenter) {
+      const totalLines = Math.ceil(this.totalCount / this.gridCount);
+      const totalContentSize = totalLines * stride - this.spacing;
+      // 只有当内容小于视口时才居中
+      if (totalContentSize < this._viewportSize) {
+        shouldAutoCenter = true;
+        globalOffset = (this._viewportSize - totalContentSize) / 2;
       }
-      this._updateItemClickHandler(node, idx);
-      if (this.renderItemFn) this.renderItemFn(node, idx);
-      if (this._needAnimateIndices.has(idx)) {
-        if (this.playItemAppearAnimationFn) this.playItemAppearAnimationFn(node, idx);
-        else this._playDefaultItemAppearAnimation(node, idx);
-        this._needAnimateIndices.delete(idx);
+    }
+
+    if (this._isVertical()) {
+      // 纵向模式：主方向是 Y，副方向是 X
+      const anchorY = uit?.anchorY ?? 0.5;
+      const anchorOffsetY = this.itemMainSize * (1 - anchorY);
+      const nodeY = itemStart + anchorOffsetY + globalOffset;
+      const y = -nodeY;
+
+      // 2. 计算当前行的实际子项数量（行内居中）- 只在启用居中且内容小于视口时生效
+      let actualCountInLine = this.gridCount;
+      if (shouldAutoCenter) {
+        const startIdxOfLine = line * this.gridCount;
+        const endIdxOfLine = Math.min(startIdxOfLine + this.gridCount, this.totalCount);
+        actualCountInLine = endIdxOfLine - startIdxOfLine;
       }
+
+      // 根据实际数量计算总宽度和位置
+      const totalWidth = actualCountInLine * this.itemCrossSize + (actualCountInLine - 1) * this.gridSpacing;
+      const x = gridPos * (this.itemCrossSize + this.gridSpacing) - totalWidth / 2 + this.itemCrossSize / 2;
+
+      node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
+      if (uit) {
+        uit.width = this.itemCrossSize;
+        uit.height = this.itemMainSize;
+      }
+    } else {
+      // 横向模式：主方向是 X，副方向是 Y
+      const anchorX = uit?.anchorX ?? 0.5;
+      const anchorOffsetX = this.itemMainSize * anchorX;
+      const nodeX = itemStart + anchorOffsetX + globalOffset;
+      const x = nodeX;
+
+      // 2. 计算当前列的实际子项数量（列内居中）- 只在启用居中且内容小于视口时生效
+      let actualCountInLine = this.gridCount;
+      if (shouldAutoCenter) {
+        const startIdxOfLine = line * this.gridCount;
+        const endIdxOfLine = Math.min(startIdxOfLine + this.gridCount, this.totalCount);
+        actualCountInLine = endIdxOfLine - startIdxOfLine;
+      }
+
+      // 根据实际数量计算总高度和位置
+      const totalHeight = actualCountInLine * this.itemCrossSize + (actualCountInLine - 1) * this.gridSpacing;
+      const y = totalHeight / 2 - gridPos * (this.itemCrossSize + this.gridSpacing) - this.itemCrossSize / 2;
+
+      node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
+      if (uit) {
+        uit.width = this.itemMainSize;
+        uit.height = this.itemCrossSize;
+      }
+    }
+    this._updateItemClickHandler(node, idx);
+    if (this.renderItemFn) this.renderItemFn(node, idx);
+    if (this._needAnimateIndices.has(idx)) {
+      if (this.playItemAppearAnimationFn) this.playItemAppearAnimationFn(node, idx);
+      else this._playDefaultItemAppearAnimation(node, idx);
+      this._needAnimateIndices.delete(idx);
+    }
     }
   }
 

@@ -55,6 +55,18 @@
       {
         "url": "db://assets/vscrollview/samples/场景7-不等宽(横向).scene",
         "uuid": "ed15f731-755e-4423-bac3-68b6b04a0912"
+      },
+      {
+        "url": "db://assets/vscrollview/samples/场景8-邮件列表案例.scene",
+        "uuid": "d2795dc5-da1f-4fb5-95a8-43e9f8a6b34f"
+      },
+      {
+        "url": "db://assets/vscrollview/samples/场景9-不等高列表(子项点击展开).scene",
+        "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
+      },
+      {
+        "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
+        "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
       }
     ]
   },
@@ -157,8 +169,8 @@
         "progress": 1,
         "state": "success",
         "stage": "build",
-        "message": "2025-11-2 02:19:25 build success in 11 s!",
-        "detailMessage": "Asset DB is resume!\r",
+        "message": "2025-11-7 14:59:52 build success in 33 s!",
+        "detailMessage": "handle json group\r",
         "options": {
           "name": "VScrollView",
           "server": "",
@@ -236,6 +248,18 @@
             {
               "url": "db://assets/vscrollview/samples/场景7-不等宽(横向).scene",
               "uuid": "ed15f731-755e-4423-bac3-68b6b04a0912"
+            },
+            {
+              "url": "db://assets/vscrollview/samples/场景8-邮件列表案例.scene",
+              "uuid": "d2795dc5-da1f-4fb5-95a8-43e9f8a6b34f"
+            },
+            {
+              "url": "db://assets/vscrollview/samples/场景9-不等高列表(子项点击展开).scene",
+              "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
+            },
+            {
+              "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
+              "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
             }
           ],
           "wasmCompressionMode": false,
@@ -247,7 +271,7 @@
           "__version__": "1.3.9",
           "logDest": "project://temp/builder/log/web-mobile2025-10-26 02-23.log"
         },
-        "time": "2025-11-2 02:19:14",
+        "time": "2025-11-7 14:59:19",
         "dirty": false
       }
     }
