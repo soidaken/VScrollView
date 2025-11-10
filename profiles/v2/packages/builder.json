@@ -33,6 +33,10 @@
         "uuid": "b0e61247-4e0e-4111-8cbf-8631439e28c0"
       },
       {
+        "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
+        "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
+      },
+      {
         "url": "db://assets/vscrollview/samples/场景2-不等高列表.scene",
         "uuid": "4a70cf7e-a185-4d21-8e5c-7267b1ffa065"
       },
@@ -65,8 +69,13 @@
         "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
       },
       {
+<<<<<<< HEAD
         "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
         "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
+=======
+        "url": "db://assets/vscrollview/samples/场景11-不等高列表(子项点击展开2).scene",
+        "uuid": "723efeb2-1a3d-4450-b758-69fb04c082e2"
+>>>>>>> d67a1bd14e7509a7f85923b62f9bb894d2b7c769
       }
     ]
   },
@@ -169,8 +178,13 @@
         "progress": 1,
         "state": "success",
         "stage": "build",
+<<<<<<< HEAD
         "message": "2025-11-7 14:59:52 build success in 33 s!",
         "detailMessage": "handle json group\r",
+=======
+        "message": "2025-11-9 17:56:56 build success in 13 s!",
+        "detailMessage": "// ---- build task 给所有的资源加上 MD5 后缀 ----\r",
+>>>>>>> d67a1bd14e7509a7f85923b62f9bb894d2b7c769
         "options": {
           "name": "VScrollView",
           "server": "",
@@ -226,6 +240,10 @@
               "uuid": "b0e61247-4e0e-4111-8cbf-8631439e28c0"
             },
             {
+              "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
+              "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
+            },
+            {
               "url": "db://assets/vscrollview/samples/场景2-不等高列表.scene",
               "uuid": "4a70cf7e-a185-4d21-8e5c-7267b1ffa065"
             },
@@ -258,8 +276,13 @@
               "uuid": "b118a2ec-1b1c-4a18-91b7-25b35eb27c6e"
             },
             {
+<<<<<<< HEAD
               "url": "db://assets/vscrollview/samples/场景10-上拉加载下拉刷新.scene",
               "uuid": "742ff29f-c723-4e75-abd8-85f3d2f5522d"
+=======
+              "url": "db://assets/vscrollview/samples/场景11-不等高列表(子项点击展开2).scene",
+              "uuid": "723efeb2-1a3d-4450-b758-69fb04c082e2"
+>>>>>>> d67a1bd14e7509a7f85923b62f9bb894d2b7c769
             }
           ],
           "wasmCompressionMode": false,
@@ -271,7 +294,11 @@
           "__version__": "1.3.9",
           "logDest": "project://temp/builder/log/web-mobile2025-10-26 02-23.log"
         },
+<<<<<<< HEAD
         "time": "2025-11-7 14:59:19",
+=======
+        "time": "2025-11-9 17:56:43",
+>>>>>>> d67a1bd14e7509a7f85923b62f9bb894d2b7c769
         "dirty": false
       }
     }

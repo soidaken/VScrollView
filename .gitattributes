@@ -4,3 +4,27 @@
 # 如果是 Windows 特定批处理文件，可以例外：
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+
+# 告诉 git 这些是二进制文件，不要动它们
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.psd binary
+*.fbx binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.atlas binary
+*.plist binary
+*.prefab binary
+*.anim binary
+*.bin binary
+*.zip binary
+*.rar binary
+*.unity binary
+*.mat binary
+*.asset binary
