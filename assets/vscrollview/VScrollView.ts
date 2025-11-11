@@ -163,6 +163,16 @@ export class VirtualScrollView extends Component {
   })
   public autoCenter: boolean = false;
 
+
+    @property({
+    displayName: '阻止父级滚动',
+    tooltip: '嵌套滚动场景下阻止触摸事件继续冒泡给父级',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList;
+    },
+  })
+  public blockParentScroll: boolean = false;
+
   @property({
     type: [Prefab],
     displayName: '子项预制体数组',
@@ -943,7 +953,13 @@ export class VirtualScrollView extends Component {
     if (node && this.renderItemFn) this.renderItemFn(node, index);
   }
 
+  private _stopTouchEvent(e?: EventTouch) {
+  if (!this.blockParentScroll || !e) return;
+    e.propagationStopped = true;
+  }
+
   private _onDown(e: EventTouch) {
+    this._stopTouchEvent(e);
     this._isTouching = true;
     this._velocity = 0;
     this._velSamples.length = 0;
@@ -954,6 +970,7 @@ export class VirtualScrollView extends Component {
   }
 
   private _onMove(e: EventTouch) {
+    this._stopTouchEvent(e);
     if (!this._isTouching) return;
     const uiDelta = e.getUIDelta(this._tmpMoveVec2);
     const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
@@ -1028,6 +1045,7 @@ export class VirtualScrollView extends Component {
   }
 
   private _onUp(e?: EventTouch) {
+    this._stopTouchEvent(e);
     if (!this._isTouching) return;
     this._isTouching = false;
 
