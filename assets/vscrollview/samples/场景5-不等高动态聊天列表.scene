@@ -597,7 +597,10 @@
       "__expectedType__": "cc.Prefab"
     },
     "useDynamicSize": true,
+    "autoCenter": false,
     "useDynamicHeight": true,
+    "columns": 1,
+    "columnSpacing": 0,
     "itemPrefabs": [
       {
         "__uuid__": "90d80fbf-2766-4731-a032-95a819fd0562",
@@ -611,8 +614,17 @@
     "gridCount": 1,
     "gridSpacing": 8,
     "spacing": 16,
+    "headerSpacing": 0,
+    "footerSpacing": 0,
     "totalCount": 100,
     "buffer": 0,
+    "enablePullRefresh": false,
+    "pullRefreshThreshold": 100,
+    "pullRefreshMaxOffset": 150,
+    "enableLoadMore": false,
+    "loadMoreThreshold": 100,
+    "loadMoreMaxOffset": 150,
+    "pullDampingRate": 0.5,
     "pixelAlign": true,
     "inertiaDampK": 1,
     "springK": 160,

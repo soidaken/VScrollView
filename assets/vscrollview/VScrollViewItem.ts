@@ -1,18 +1,11 @@
-import {
-  _decorator,
-  Component,
-  Node,
-  EventTouch,
-  Vec2,
-  Label,
-  Tween,
-  tween,
-  Vec3,
-  settings,
-  Sorting2D,
-  RichText,
-} from 'cc';
+//@ts-ignore
+import { _decorator, Component, Node, EventTouch, Vec2, Label, Tween, tween, Vec3, settings, Sorting2D, RichText, sys } from 'cc';
 const { ccclass } = _decorator;
+
+const hasSorting2d = Sorting2D !== undefined;
+if (!hasSorting2d) {
+  console.warn(`❌当前引擎版本不支持Sorting2D组件，如果需要请切换到3.8.7及以上版本`);
+}
 
 /**
  * 更改UI节点的渲染排序层级
@@ -20,11 +13,10 @@ const { ccclass } = _decorator;
  * @param sortingLayer number
  * @param sortingOrder number
  */
-export function changeUISortingLayer(
-  sortingNode: Node,
-  sortingLayer: number,
-  sortingOrder?: number
-) {
+export function changeUISortingLayer(sortingNode: Node, sortingLayer: number, sortingOrder?: number) {
+  if (!hasSorting2d) {
+    return;
+  }
   let sortingLayers = settings.querySettings('engine', 'sortingLayers') as any[];
 
   //编辑器bug,默认有default,但是读取出来没有,需要自己配置一个后才会有默认数据.
@@ -35,15 +27,15 @@ export function changeUISortingLayer(
   const result = sortingLayers.find(layer => layer.value === sortingLayer);
   //如果没有找到对应的layer,则使用引擎内置默认层,并给出警告
   if (!result) {
-    console.warn(
-      `❌未找到对应的sortingLayer:${sortingLayer}，请检查是否已在项目设置中配置该层级。将使用默认层级代替。`
-    );
+    console.warn(`❌未找到对应的sortingLayer:${sortingLayer}，请检查是否已在项目设置中配置该层级。将使用默认层级代替。`);
     sortingLayer = sortingLayers[0].value;
   }
   const sort2d = sortingNode.getComponent(Sorting2D) || sortingNode.addComponent(Sorting2D);
   if (sort2d) {
+    //@ts-ignore
     sort2d.sortingLayer = sortingLayer;
     if (sortingOrder !== undefined) {
+      //@ts-ignore
       sort2d.sortingOrder = sortingOrder;
     }
   }
@@ -99,7 +91,6 @@ export class VScrollViewItem extends Component {
     for (let i = 0; i < labels.length; i++) {
       changeUISortingLayer(labels[i].node, 0, orderNumber);
       orderNumber++;
-
     }
   }
 

@@ -600,7 +600,10 @@
       "__expectedType__": "cc.Prefab"
     },
     "useDynamicSize": true,
+    "autoCenter": false,
     "useDynamicHeight": true,
+    "columns": 1,
+    "columnSpacing": 0,
     "itemPrefabs": [
       {
         "__uuid__": "4593def0-463d-4558-98a2-d77d423e27d8",

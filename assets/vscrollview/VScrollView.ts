@@ -148,12 +148,6 @@ export class VirtualScrollView extends Component {
   public useDynamicSize: boolean = false;
 
   @property({
-    displayName: '不等高模式（已废弃,仅保持兼容）',
-    tooltip: '启用不等高模式（已废弃,仅保持兼容）',
-  })
-  public useDynamicHeight: boolean = false;
-
-  @property({
     displayName: '自动居中布局',
     tooltip: '当子项数量少于行/列数时，自动居中显示（适用于等大小模式）',
     visible(this: VirtualScrollView) {
@@ -161,6 +155,24 @@ export class VirtualScrollView extends Component {
     },
   })
   public autoCenter: boolean = false;
+
+  @property({
+    displayName: '不等高模式（已废弃,仅保持兼容）',
+    tooltip: '启用不等高模式（已废弃,仅保持兼容,请使用 useDynamicSize ）',
+  })
+  public useDynamicHeight: boolean = false;
+
+  @property({
+    displayName: '列数（已废弃,仅保持兼容）',
+    tooltip: '列数（已废弃,请使用 gridCount 替代，仅保持兼容）',
+  })
+  public columns: number = 1;
+
+  @property({
+    displayName: '列间距（已废弃,仅保持兼容）',
+    tooltip: '列间距（已废弃,请使用 gridSpacing 替代，仅保持兼容）',
+  })
+  public columnSpacing: number = 0;
 
   @property({
     type: [Prefab],
@@ -193,7 +205,7 @@ export class VirtualScrollView extends Component {
       return this.useVirtualList && !this.useDynamicSize;
     },
   })
-  public gridSpacing: number = 8;
+  public gridSpacing: number = 0;
 
   @property({
     displayName: '主方向间距',
@@ -203,7 +215,7 @@ export class VirtualScrollView extends Component {
       return this.useVirtualList;
     },
   })
-  public spacing: number = 8;
+  public spacing: number = 0;
 
   @property({
     displayName: '头部间距',
@@ -447,6 +459,15 @@ export class VirtualScrollView extends Component {
     if (this.useDynamicHeight) {
       this.useDynamicSize = true;
     }
+
+    //兼容之前版本的参数
+    if (this.columns && this.direction === ScrollDirection.VERTICAL) {
+      this.gridCount = this.columns;
+    }
+    if (this.columnSpacing && this.direction === ScrollDirection.VERTICAL) {
+      this.gridSpacing = this.columnSpacing;
+    }
+
     if (this.useDynamicSize) await this._initDynamicSizeMode();
     else await this._initFixedSizeMode();
     this._bindTouch();
