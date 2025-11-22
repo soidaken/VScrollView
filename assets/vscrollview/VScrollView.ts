@@ -377,7 +377,7 @@ export class VirtualScrollView extends Component {
   private _hasDeterminedScrollDirection: boolean = false;
   private _shouldBlockParent: boolean = false;
   private _scrollDirectionThreshold: number = 15; // 滑动阈值（像素）
-  private _scrollAngleThreshold: number = 50; // 角度阈值（度）
+  private _scrollAngleThreshold: number = 30; // 角度阈值（度）
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();

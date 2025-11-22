@@ -20,8 +20,8 @@
         "progress": 1,
         "state": "success",
         "stage": "build",
-        "message": "2025-11-22 19:09:35 build success in 41 s!",
-        "detailMessage": "build engine done: output: C:\\Users\\zzz\\AppData\\Local\\Temp\\CocosCreator\\3.8.7\\builder\\engine\\d10dec021e78cf242b92f840efeca37b\r",
+        "message": "2025-11-22 19:15:20 build success in 14 s!",
+        "detailMessage": "// ---- build task 给所有的资源加上 MD5 后缀 ----\r",
         "options": {
           "name": "VScrollView",
           "server": "",
@@ -130,7 +130,7 @@
           "__version__": "1.3.9",
           "logDest": "project://temp/builder/log/web-desktop2025-11-22 19-08.log"
         },
-        "time": "2025-11-22 19:08:53",
+        "time": "2025-11-22 19:15:06",
         "dirty": false
       }
     }

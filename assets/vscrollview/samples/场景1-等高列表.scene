@@ -606,7 +606,7 @@
     "gridCount": 1,
     "gridSpacing": 0,
     "spacing": 0,
-    "headerSpacing": 100,
+    "headerSpacing": 0,
     "footerSpacing": 0,
     "totalCount": 100,
     "buffer": 0,
