@@ -56,7 +56,7 @@
     "_globals": {
       "__id__": 57
     },
-    "_id": "c1682a3f-0f77-43d5-b141-6a8ebf6360b1"
+    "_id": "2b2e6906-a81e-4c2e-bffd-3700ee60906a"
   },
   {
     "__type__": "cc.Node",
@@ -603,14 +603,16 @@
     },
     "useDynamicSize": false,
     "useDynamicHeight": false,
+    "autoCenter": false,
+    "blockParentScroll": false,
     "itemPrefabs": [],
     "gridCount": 2,
     "gridSpacing": 8,
     "spacing": 8,
-    "headerSpacing": 100,
-    "footerSpacing": 100,
+    "headerSpacing": 0,
+    "footerSpacing": 0,
     "totalCount": 10,
-    "buffer": 2,
+    "buffer": 0,
     "enablePullRefresh": false,
     "pullRefreshThreshold": 100,
     "pullRefreshMaxOffset": 150,

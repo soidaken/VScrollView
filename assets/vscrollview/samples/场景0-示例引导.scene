@@ -3647,6 +3647,8 @@
     "itemPrefab": null,
     "useDynamicSize": false,
     "useDynamicHeight": false,
+    "autoCenter": false,
+    "blockParentScroll": false,
     "itemPrefabs": [],
     "gridCount": 1,
     "gridSpacing": 8,

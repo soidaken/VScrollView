@@ -19,7 +19,7 @@ export class scene4 extends Component {
   onLoad() {
     game.frameRate = 120;
     // 模拟数据
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 20; i++) {
       this.data.push({
         data1: `第 ${i + 1} 项`,
         icon: i % this.spfs.length,

@@ -154,6 +154,15 @@ export class VirtualScrollView extends Component {
   public useDynamicHeight: boolean = false;
 
   @property({
+    displayName: '自动居中布局',
+    tooltip: '当子项数量少于行/列数时，自动居中显示（适用于等大小模式）',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList && !this.useDynamicSize;
+    },
+  })
+  public autoCenter: boolean = false;
+
+  @property({
     type: [Prefab],
     displayName: '子项预制体数组',
     tooltip: '不等大小模式：预先提供的子项预制体数组（可在编辑器拖入）',
@@ -363,6 +372,12 @@ export class VirtualScrollView extends Component {
   private _isRefreshing: boolean = false;
   private _isLoadingMore: boolean = false;
   private _hasMore: boolean = true; // 是否还有更多数据
+
+  private _touchStartPos: Vec2 = new Vec2();
+  private _hasDeterminedScrollDirection: boolean = false;
+  private _shouldBlockParent: boolean = false;
+  private _scrollDirectionThreshold: number = 15; // 滑动阈值（像素）
+  private _scrollAngleThreshold: number = 50; // 角度阈值（度）
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -956,7 +971,23 @@ export class VirtualScrollView extends Component {
     if (node && this.renderItemFn) this.renderItemFn(node, index);
   }
 
+  private _stopTouchEvent(e?: EventTouch) {
+    if (!e) return;
+
+    // 如果已经确定要阻止父级，直接阻止
+    if (this._shouldBlockParent) {
+      e.propagationStopped = true;
+    }
+  }
+
   private _onDown(e: EventTouch) {
+    // 记录触摸起始位置
+    const uiPos = e.getUILocation(this._touchStartPos);
+    this._touchStartPos.set(uiPos);
+    this._hasDeterminedScrollDirection = false;
+    this._shouldBlockParent = false;
+
+    this._stopTouchEvent(e);
     this._isTouching = true;
     this._velocity = 0;
     this._velSamples.length = 0;
@@ -968,7 +999,56 @@ export class VirtualScrollView extends Component {
 
   private _onMove(e: EventTouch) {
     if (!this._isTouching) return;
+
     const uiDelta = e.getUIDelta(this._tmpMoveVec2);
+    const currentPos = e.getUILocation();
+
+    // 第一次移动时判断滑动方向
+    if (!this._hasDeterminedScrollDirection) {
+      const deltaX = currentPos.x - this._touchStartPos.x;
+      const deltaY = currentPos.y - this._touchStartPos.y;
+      const totalDelta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      // 超过距离阈值才判断方向
+      if (totalDelta > this._scrollDirectionThreshold) {
+        this._hasDeterminedScrollDirection = true;
+
+        // 计算滑动角度（相对于水平方向）
+        const angle = Math.abs((Math.atan2(deltaY, deltaX) * 180) / Math.PI);
+
+        // 判断是否为纵向滑动：角度在 [90° - 阈值, 90° + 阈值] 范围内
+        const isVerticalScroll = angle > 90 - this._scrollAngleThreshold && angle < 90 + this._scrollAngleThreshold;
+
+        // 判断是否为横向滑动：角度在 [0°, 阈值] 或 [180° - 阈值, 180°] 范围内
+        const isHorizontalScroll = angle < this._scrollAngleThreshold || angle > 180 - this._scrollAngleThreshold;
+
+        const isListVertical = this._isVertical();
+
+        // 方向一致时才考虑拦截
+        if ((isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll)) {
+          // 检查是否在边界
+          const pos = this._getContentMainPos();
+          const minBound = Math.min(this._boundsMin, this._boundsMax);
+          const maxBound = Math.max(this._boundsMin, this._boundsMax);
+          const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
+
+          // 判断滑动方向
+          const scrollingToStart = this._isVertical() ? delta > 0 : delta < 0;
+          const scrollingToEnd = this._isVertical() ? delta < 0 : delta > 0;
+
+          // 只有在非边界位置，或者在边界但向内滑动时才拦截
+          const atStartBound = this._isVertical() ? pos <= minBound : pos >= maxBound;
+          const atEndBound = this._isVertical() ? pos >= maxBound : pos <= minBound;
+
+          if ((!atStartBound && !atEndBound) || (atStartBound && scrollingToEnd) || (atEndBound && scrollingToStart)) {
+            this._shouldBlockParent = true;
+          }
+        }
+      }
+    }
+
+    this._stopTouchEvent(e);
+    // const uiDelta = e.getUIDelta(this._tmpMoveVec2);
     const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
     let pos = this._getContentMainPos();
     const minBound = Math.min(this._boundsMin, this._boundsMax);
@@ -1041,6 +1121,11 @@ export class VirtualScrollView extends Component {
   }
 
   private _onUp(e?: EventTouch) {
+    // 重置方向判断标志
+    this._hasDeterminedScrollDirection = false;
+    this._shouldBlockParent = false;
+
+    this._stopTouchEvent(e);
     if (!this._isTouching) return;
     this._isTouching = false;
 
@@ -1319,33 +1404,73 @@ export class VirtualScrollView extends Component {
         this._needAnimateIndices.delete(idx);
       }
     } else {
+      // 等大小模式
       if (!node) return;
       node.active = true;
       const stride = this.itemMainSize + this.spacing;
       const line = Math.floor(idx / this.gridCount);
       const gridPos = idx % this.gridCount;
       const uit = node.getComponent(UITransform);
-      // 添加 headerSpacing
+
+      // 1. 计算基础位置（包含 headerSpacing）
       const itemStart = this.headerSpacing + line * stride;
+
+      // 2. 计算全局偏移（视口居中）- 只在内容小于视口时生效
+      let globalOffset = 0;
+      let shouldAutoCenter = false; // 是否应该居中
+      if (this.autoCenter) {
+        const totalLines = Math.ceil(this.totalCount / this.gridCount);
+        const totalContentSize = this.headerSpacing + totalLines * stride - this.spacing + this.footerSpacing;
+        // 只有当内容小于视口时才居中
+        if (totalContentSize < this._viewportSize) {
+          shouldAutoCenter = true;
+          globalOffset = (this._viewportSize - totalContentSize) / 2;
+        }
+      }
+
       if (this._isVertical()) {
+        // 纵向模式：主方向是 Y，副方向是 X
         const anchorY = uit?.anchorY ?? 0.5;
         const anchorOffsetY = this.itemMainSize * (1 - anchorY);
-        const nodeY = itemStart + anchorOffsetY;
+        const nodeY = itemStart + anchorOffsetY + globalOffset;
         const y = -nodeY;
-        const totalWidth = this.gridCount * this.itemCrossSize + (this.gridCount - 1) * this.gridSpacing;
+
+        // 3. 计算当前行的实际子项数量（行内居中）- 只在启用居中且内容小于视口时生效
+        let actualCountInLine = this.gridCount;
+        if (shouldAutoCenter) {
+          const startIdxOfLine = line * this.gridCount;
+          const endIdxOfLine = Math.min(startIdxOfLine + this.gridCount, this.totalCount);
+          actualCountInLine = endIdxOfLine - startIdxOfLine;
+        }
+
+        // 根据实际数量计算总宽度和位置
+        const totalWidth = actualCountInLine * this.itemCrossSize + (actualCountInLine - 1) * this.gridSpacing;
         const x = gridPos * (this.itemCrossSize + this.gridSpacing) - totalWidth / 2 + this.itemCrossSize / 2;
+
         node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
         if (uit) {
           uit.width = this.itemCrossSize;
           uit.height = this.itemMainSize;
         }
       } else {
+        // 横向模式：主方向是 X，副方向是 Y
         const anchorX = uit?.anchorX ?? 0.5;
         const anchorOffsetX = this.itemMainSize * anchorX;
-        const nodeX = itemStart + anchorOffsetX;
+        const nodeX = itemStart + anchorOffsetX + globalOffset;
         const x = nodeX;
-        const totalHeight = this.gridCount * this.itemCrossSize + (this.gridCount - 1) * this.gridSpacing;
+
+        // 3. 计算当前列的实际子项数量（列内居中）- 只在启用居中且内容小于视口时生效
+        let actualCountInLine = this.gridCount;
+        if (shouldAutoCenter) {
+          const startIdxOfLine = line * this.gridCount;
+          const endIdxOfLine = Math.min(startIdxOfLine + this.gridCount, this.totalCount);
+          actualCountInLine = endIdxOfLine - startIdxOfLine;
+        }
+
+        // 根据实际数量计算总高度和位置
+        const totalHeight = actualCountInLine * this.itemCrossSize + (actualCountInLine - 1) * this.gridSpacing;
         const y = totalHeight / 2 - gridPos * (this.itemCrossSize + this.gridSpacing) - this.itemCrossSize / 2;
+
         node.setPosition(this.pixelAlign ? Math.round(x) : x, this.pixelAlign ? Math.round(y) : y);
         if (uit) {
           uit.width = this.itemMainSize;
