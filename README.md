@@ -1,6 +1,9 @@
 # VScrollView
 
-基于 CocosCreater 引擎编辑器的全新滚动组件和虚拟列表,目前仅支持 3.8.7 版本,2.4.x 版本在另一个仓库.
+基于 CocosCreater 引擎编辑器的全新滚动组件和虚拟列表
+- 目前支持 >=3.8.7 版本,全功能
+- 运行支持 3.8.0-3.8.6,无分层DC优化
+- 2.4.x 版本在另一个仓库,无分层DC优化
 
 [在线预览地址](https://soidaken.github.io/VSCrollView_SamplesPreView/)
 
