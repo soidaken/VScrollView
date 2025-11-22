@@ -889,16 +889,21 @@ export class VirtualScrollView extends Component {
   public scrollToIndex(index: number, animate = false) {
     index = math.clamp(index | 0, 0, Math.max(0, this.totalCount - 1));
     let targetPos = 0;
+
     if (this.useDynamicSize) {
+      // 不等大小模式：_prefixPositions 已经包含了 headerSpacing
       targetPos = this._prefixPositions[index] || 0;
     } else {
+      // 等大小模式：需要手动加上 headerSpacing
       const line = Math.floor(index / this.gridCount);
-      targetPos = line * (this.itemMainSize + this.spacing);
+      targetPos = this.headerSpacing + line * (this.itemMainSize + this.spacing);
     }
+
     // 横向模式：滚动方向相反，取负值
     if (!this._isVertical()) {
       targetPos = -targetPos;
     }
+
     this._scrollToPosition(targetPos, animate);
   }
 
@@ -939,6 +944,7 @@ export class VirtualScrollView extends Component {
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
     this._flashToPosition(target);
   }
+
   public flashToIndex(index: number) {
     if (!this.useVirtualList) {
       console.warn('[VirtualScrollView] 简单滚动模式不支持 flashToIndex');
@@ -946,15 +952,20 @@ export class VirtualScrollView extends Component {
     }
     index = math.clamp(index | 0, 0, Math.max(0, this.totalCount - 1));
     let targetPos = 0;
+
     if (this.useDynamicSize) {
+      // 不等大小模式：_prefixPositions 已经包含了 headerSpacing
       targetPos = this._prefixPositions[index] || 0;
     } else {
+      // 等大小模式：需要手动加上 headerSpacing
       const line = Math.floor(index / this.gridCount);
-      targetPos = line * (this.itemMainSize + this.spacing);
+      targetPos = this.headerSpacing + line * (this.itemMainSize + this.spacing);
     }
+
     if (!this._isVertical()) {
       targetPos = -targetPos;
     }
+
     this._flashToPosition(targetPos);
   }
 
