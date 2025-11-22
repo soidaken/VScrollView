@@ -3651,6 +3651,8 @@
     "gridCount": 1,
     "gridSpacing": 8,
     "spacing": 8,
+    "headerSpacing": 0,
+    "footerSpacing": 0,
     "totalCount": 50,
     "buffer": 1,
     "enablePullRefresh": false,

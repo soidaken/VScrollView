@@ -86,7 +86,6 @@ export type OnRefreshStateChangeFn = (state: RefreshState, offset: number) => vo
 // 加载更多状态回调
 export type OnLoadMoreStateChangeFn = (state: LoadMoreState, offset: number) => void;
 
-
 export enum ScrollDirection {
   VERTICAL = 0,
   HORIZONTAL = 1,
@@ -94,20 +93,20 @@ export enum ScrollDirection {
 
 // 添加刷新状态枚举
 export enum RefreshState {
-  IDLE = 0,           // 空闲状态
-  PULLING = 1,        // 正在拉动（未达到触发阈值）
-  READY = 2,          // 达到触发阈值，松手即可刷新
-  REFRESHING = 3,     // 正在刷新中
-  COMPLETE = 4,       // 刷新完成
+  IDLE = 0, // 空闲状态
+  PULLING = 1, // 正在拉动（未达到触发阈值）
+  READY = 2, // 达到触发阈值，松手即可刷新
+  REFRESHING = 3, // 正在刷新中
+  COMPLETE = 4, // 刷新完成
 }
 
 export enum LoadMoreState {
-  IDLE = 0,           // 空闲状态
-  PULLING = 1,        // 正在上拉（未达到触发阈值）
-  READY = 2,          // 达到触发阈值，松手即可加载
-  LOADING = 3,        // 正在加载中
-  COMPLETE = 4,       // 加载完成
-  NO_MORE = 5,        // 没有更多数据
+  IDLE = 0, // 空闲状态
+  PULLING = 1, // 正在上拉（未达到触发阈值）
+  READY = 2, // 达到触发阈值，松手即可加载
+  LOADING = 3, // 正在加载中
+  COMPLETE = 4, // 加载完成
+  NO_MORE = 5, // 没有更多数据
 }
 
 @ccclass('VirtualScrollView')
@@ -198,6 +197,26 @@ export class VirtualScrollView extends Component {
   public spacing: number = 8;
 
   @property({
+    displayName: '头部间距',
+    tooltip: '列表头部的额外间距（纵向为顶部，横向为左侧）',
+    range: [0, 1000, 1],
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList;
+    },
+  })
+  public headerSpacing: number = 0;
+
+  @property({
+    displayName: '尾部间距',
+    tooltip: '列表尾部的额外间距（纵向为底部，横向为右侧）',
+    range: [0, 1000, 1],
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList;
+    },
+  })
+  public footerSpacing: number = 0;
+
+  @property({
     displayName: '总条数',
     tooltip: '总条数（可在运行时 setTotalCount 动态修改）',
     range: [0, 1000, 1],
@@ -217,8 +236,7 @@ export class VirtualScrollView extends Component {
   })
   public buffer: number = 1;
 
-
-    @property({
+  @property({
     displayName: '启用下拉刷新',
     tooltip: '是否启用下拉刷新功能',
   })
@@ -280,7 +298,6 @@ export class VirtualScrollView extends Component {
   })
   public pullDampingRate: number = 0.5;
 
-
   @property({ displayName: '像素对齐', tooltip: '是否启用像素对齐' })
   public pixelAlign: boolean = true;
 
@@ -338,14 +355,14 @@ export class VirtualScrollView extends Component {
   private _scrollTween: any = null;
   private _tmpMoveVec2 = new Vec2();
 
-    // 私有状态变量
+  // 私有状态变量
   private _refreshState: RefreshState = RefreshState.IDLE;
   private _loadMoreState: LoadMoreState = LoadMoreState.IDLE;
-  private _pullOffset: number = 0;      // 当前下拉偏移量
-  private _loadOffset: number = 0;      // 当前上拉偏移量
+  private _pullOffset: number = 0; // 当前下拉偏移量
+  private _loadOffset: number = 0; // 当前上拉偏移量
   private _isRefreshing: boolean = false;
   private _isLoadingMore: boolean = false;
-  private _hasMore: boolean = true;     // 是否还有更多数据
+  private _hasMore: boolean = true; // 是否还有更多数据
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -566,28 +583,31 @@ export class VirtualScrollView extends Component {
   private _buildPrefixSum() {
     const n = this._itemSizes.length;
     this._prefixPositions = new Array(n);
-    let acc = 0;
+    // 从 headerSpacing 开始
+    let acc = this.headerSpacing;
     for (let i = 0; i < n; i++) {
       this._prefixPositions[i] = acc;
       acc += this._itemSizes[i] + this.spacing;
     }
-    this._contentSize = acc - this.spacing;
+    // 内容总大小 = 最后一个位置 + 最后一项大小 - spacing + footerSpacing
+    this._contentSize = acc - this.spacing + this.footerSpacing;
     if (this._contentSize < 0) this._contentSize = 0;
     if (this._isVertical()) this._contentTf.height = Math.max(this._contentSize, this._viewportSize);
     else this._contentTf.width = Math.max(this._contentSize, this._viewportSize);
 
-    // 修改：横向模式的边界
     if (this._isVertical()) {
-      this._boundsMin = 0; // 顶部
-      this._boundsMax = Math.max(0, this._contentSize - this._viewportSize); // 底部（正值）
+      this._boundsMin = 0;
+      this._boundsMax = Math.max(0, this._contentSize - this._viewportSize);
     } else {
-      this._boundsMin = -Math.max(0, this._contentSize - this._viewportSize); // 最大滚动距离（负值）
-      this._boundsMax = 0; // 初始位置（顶部）
+      this._boundsMin = -Math.max(0, this._contentSize - this._viewportSize);
+      this._boundsMax = 0;
     }
   }
 
   private _posToFirstIndex(pos: number): number {
-    if (pos <= 0) return 0;
+    // _prefixPositions 已经包含了 headerSpacing，直接查找即可
+    if (pos <= this.headerSpacing) return 0; // 修改：如果在 header 区域内，返回 0
+
     let l = 0,
       r = this._prefixPositions.length - 1,
       ans = this._prefixPositions.length;
@@ -606,13 +626,17 @@ export class VirtualScrollView extends Component {
   private _calcVisibleRange(scrollPos: number): { start: number; end: number } {
     const n = this._prefixPositions.length;
     if (n === 0) return { start: 0, end: 0 };
+
     const start = this._posToFirstIndex(scrollPos);
     const endPos = scrollPos + this._viewportSize;
     let end = start;
+
+    // 找到第一个起始位置超出可视区域的 item
     while (end < n) {
-      if (this._prefixPositions[end] >= endPos) break;
+      if (this._prefixPositions[end] >= endPos) break; // 恢复原来的逻辑
       end++;
     }
+
     return { start: Math.max(0, start - this.buffer), end: Math.min(n, end + this.buffer) };
   }
 
@@ -631,9 +655,7 @@ export class VirtualScrollView extends Component {
       a = -this.springK * (pos - refreshPos) - this.springC * this._velocity;
     } else if (this._isLoadingMore && this._loadMoreState === LoadMoreState.LOADING) {
       // 加载中，保持在加载位置
-      const loadPos = this._isVertical() 
-        ? this._boundsMax + this.loadMoreThreshold 
-        : this._boundsMin - this.loadMoreThreshold;
+      const loadPos = this._isVertical() ? this._boundsMax + this.loadMoreThreshold : this._boundsMin - this.loadMoreThreshold;
       a = -this.springK * (pos - loadPos) - this.springC * this._velocity;
     } else if (pos < minBound) {
       a = -this.springK * (pos - minBound) - this.springC * this._velocity;
@@ -649,7 +671,7 @@ export class VirtualScrollView extends Component {
         this._velocity *= Math.exp(-this.inertiaDampK * dt);
       }
     }
-    
+
     this._velocity += a * dt;
     if (Math.abs(this._velocity) < this.velocitySnap && a === 0) this._velocity = 0;
     if (this._velocity !== 0) {
@@ -694,7 +716,7 @@ export class VirtualScrollView extends Component {
       this._prefixPositions[i] = acc;
       acc += this._itemSizes[i] + this.spacing;
     }
-    this._contentSize = acc - this.spacing;
+    this._contentSize = acc - this.spacing + this.footerSpacing;
     if (this._contentSize < 0) this._contentSize = 0;
     if (this._isVertical()) this._contentTf.height = Math.max(this._contentSize, this._viewportSize);
     else this._contentTf.width = Math.max(this._contentSize, this._viewportSize);
@@ -962,17 +984,17 @@ export class VirtualScrollView extends Component {
     if (this.enablePullRefresh && !this._isRefreshing) {
       // 纵向：顶部下拉（pos < minBound 且向下拉）
       // 横向：左侧右拉（pos > maxBound 且向右拉）
-      const atTopBound = this._isVertical() ? (pos <= minBound) : (pos >= maxBound);
-      const pullingDown = this._isVertical() ? (delta < 0) : (delta > 0);
-      
+      const atTopBound = this._isVertical() ? pos <= minBound : pos >= maxBound;
+      const pullingDown = this._isVertical() ? delta < 0 : delta > 0;
+
       if (atTopBound && pullingDown) {
         isPullingRefresh = true;
-        const overOffset = this._isVertical() ? (minBound - pos) : (pos - maxBound);
+        const overOffset = this._isVertical() ? minBound - pos : pos - maxBound;
         const resistance = 1 - Math.min(overOffset / this.pullRefreshMaxOffset, 1) * (1 - this.pullDampingRate);
         finalDelta = delta * resistance;
         this._pullOffset = Math.min(overOffset + Math.abs(finalDelta), this.pullRefreshMaxOffset);
         // console.log(`[VScrollView] 下拉偏移: ${this._pullOffset}`);
-        
+
         // 更新刷新状态
         if (this._pullOffset >= this.pullRefreshThreshold) {
           this._updateRefreshState(RefreshState.READY, this._pullOffset);
@@ -985,16 +1007,16 @@ export class VirtualScrollView extends Component {
     if (this.enableLoadMore && !this._isLoadingMore && this._hasMore) {
       // 纵向：底部上拉（pos > maxBound 且向上拉）
       // 横向：右侧左拉（pos < minBound 且向左拉）
-      const atBottomBound = this._isVertical() ? (pos >= maxBound) : (pos <= minBound);
-      const pullingUp = this._isVertical() ? (delta > 0) : (delta < 0);
-      
+      const atBottomBound = this._isVertical() ? pos >= maxBound : pos <= minBound;
+      const pullingUp = this._isVertical() ? delta > 0 : delta < 0;
+
       if (atBottomBound && pullingUp) {
         isPullingLoadMore = true;
-        const overOffset = this._isVertical() ? (pos - maxBound) : (minBound - pos);
+        const overOffset = this._isVertical() ? pos - maxBound : minBound - pos;
         const resistance = 1 - Math.min(overOffset / this.loadMoreMaxOffset, 1) * (1 - this.pullDampingRate);
         finalDelta = delta * resistance;
         this._loadOffset = Math.min(overOffset + Math.abs(finalDelta), this.loadMoreMaxOffset);
-        
+
         // console.log(`[VScrollView] 上拉偏移: ${this._loadOffset}`);
         // 更新加载状态
         if (this._loadOffset >= this.loadMoreThreshold) {
@@ -1071,7 +1093,6 @@ export class VirtualScrollView extends Component {
     this._velSamples.length = 0;
   }
 
-
   // 更新刷新状态
   private _updateRefreshState(state: RefreshState, offset: number) {
     if (this._refreshState === state) return;
@@ -1104,8 +1125,6 @@ export class VirtualScrollView extends Component {
     this._updateLoadMoreState(LoadMoreState.LOADING, this.loadMoreThreshold);
   }
 
-
-
   /**
    * 完成刷新（外部调用）
    * @param success 是否刷新成功
@@ -1115,7 +1134,7 @@ export class VirtualScrollView extends Component {
     this._isRefreshing = false;
     this._pullOffset = 0;
     this._updateRefreshState(success ? RefreshState.COMPLETE : RefreshState.IDLE, 0);
-    
+
     // 延迟重置到 IDLE 状态
     this.scheduleOnce(() => {
       if (this._refreshState === RefreshState.COMPLETE) {
@@ -1133,7 +1152,7 @@ export class VirtualScrollView extends Component {
     this._isLoadingMore = false;
     this._loadOffset = 0;
     this._hasMore = hasMore;
-    
+
     if (!hasMore) {
       this._updateLoadMoreState(LoadMoreState.NO_MORE, 0);
     } else {
@@ -1157,7 +1176,6 @@ export class VirtualScrollView extends Component {
     this._updateLoadMoreState(LoadMoreState.IDLE, 0);
   }
 
-
   private _updateVisible(force: boolean) {
     if (!this.useVirtualList) return;
     let scrollPos = this._getContentMainPos();
@@ -1174,7 +1192,9 @@ export class VirtualScrollView extends Component {
       newFirst = range.start;
     } else {
       const stride = this.itemMainSize + this.spacing;
-      const firstLine = Math.floor(searchPos / stride);
+      // 减去 headerSpacing 后再计算行号
+      const adjustedPos = Math.max(0, searchPos - this.headerSpacing);
+      const firstLine = Math.floor(adjustedPos / stride);
       const first = firstLine * this.gridCount;
       newFirst = math.clamp(first, 0, Math.max(0, this.totalCount - 1));
     }
@@ -1305,7 +1325,8 @@ export class VirtualScrollView extends Component {
       const line = Math.floor(idx / this.gridCount);
       const gridPos = idx % this.gridCount;
       const uit = node.getComponent(UITransform);
-      const itemStart = line * stride;
+      // 添加 headerSpacing
+      const itemStart = this.headerSpacing + line * stride;
       if (this._isVertical()) {
         const anchorY = uit?.anchorY ?? 0.5;
         const anchorOffsetY = this.itemMainSize * (1 - anchorY);
@@ -1385,7 +1406,8 @@ export class VirtualScrollView extends Component {
     if (this.useDynamicSize) return;
     const stride = this.itemMainSize + this.spacing;
     const totalLines = Math.ceil(this.totalCount / this.gridCount);
-    this._contentSize = totalLines > 0 ? totalLines * stride - this.spacing : 0;
+    // 添加 headerSpacing 和 footerSpacing
+    this._contentSize = totalLines > 0 ? this.headerSpacing + totalLines * stride - this.spacing + this.footerSpacing : 0;
     if (this._isVertical()) this._contentTf.height = Math.max(this._contentSize, this._viewportSize);
     else this._contentTf.width = Math.max(this._contentSize, this._viewportSize);
 
