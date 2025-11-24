@@ -55,11 +55,19 @@ export class VScrollViewItem extends Component {
   /** 点击回调（由 VirtualScrollView 注入） */
   public onClickCallback: ((index: number) => void) | null = null;
 
+  /** 长按回调（由 VirtualScrollView 注入） */
+  public onLongPressCallback: ((index: number) => void) | null = null;
+
+  /** 长按触发时长（秒） */
+  public longPressTime: number = 0.6;
+
   private _touchStartNode: Node | null = null;
   private _isCanceled: boolean = false;
   private _startPos: Vec2 = new Vec2();
   private _moveThreshold: number = 40; // 滑动阈值
   private _clickThreshold: number = 10; // 点击阈值
+  private _longPressTimer: number = 0; // 长按计时器
+  private _isLongPressed: boolean = false; // 是否已触发长按
 
   onLoad() {
     // 一次性注册事件，生命周期内不变
@@ -112,10 +120,32 @@ export class VScrollViewItem extends Component {
     this.dataIndex = index;
   }
 
+
+  protected update(dt: number): void {
+    // 如果正在触摸且未取消，累加长按计时
+    if (this._touchStartNode && !this._isCanceled && !this._isLongPressed) {
+      this._longPressTimer += dt;
+      if (this._longPressTimer >= this.longPressTime) {
+        this._triggerLongPress();
+      }
+    }
+  }
+
+  private _triggerLongPress() {
+    this._isLongPressed = true;
+    if (this.onLongPressCallback) {
+      this.onLongPressCallback(this.dataIndex);
+    }
+    // 触发长按后恢复缩放
+    this._restoreScale();
+  }
+
   private _onTouchStart(e: EventTouch) {
     // console.log("_onTouchStart");
     this._touchStartNode = this.node;
     this._isCanceled = false;
+    this._isLongPressed = false;
+    this._longPressTimer = 0;
     e.getLocation(this._startPos);
 
     // 缩放反馈（假设第一个子节点是内容容器）
@@ -132,7 +162,7 @@ export class VScrollViewItem extends Component {
     const dy = movePos.y - this._startPos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // 超过阈值认为是滑动，取消点击
+    // 超过阈值认为是滑动，取消点击和长按
     if (dist > this._moveThreshold) {
       this._isCanceled = true;
       this._restoreScale();
@@ -142,6 +172,12 @@ export class VScrollViewItem extends Component {
 
   private _onTouchEnd(e: EventTouch) {
     if (this._isCanceled) {
+      this._reset();
+      return;
+    }
+
+    // 如果已经触发了长按，不再触发点击
+    if (this._isLongPressed) {
       this._reset();
       return;
     }
@@ -177,5 +213,7 @@ export class VScrollViewItem extends Component {
   private _reset() {
     this._touchStartNode = null;
     this._isCanceled = false;
+    this._longPressTimer = 0;
+    this._isLongPressed = false;
   }
 }

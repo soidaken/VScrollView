@@ -78,6 +78,7 @@ class InternalNodePool {
 export type RenderItemFn = (node: Node, index: number) => void;
 export type ProvideNodeFn = (index: number) => Node | Promise<Node>;
 export type OnItemClickFn = (node: Node, index: number) => void;
+export type OnItemLongPressFn = (node: Node, index: number) => void;
 export type PlayItemAppearAnimationFn = (node: Node, index: number) => void;
 export type GetItemHeightFn = (index: number) => number;
 export type GetItemTypeIndexFn = (index: number) => number;
@@ -350,6 +351,7 @@ export class VirtualScrollView extends Component {
   public renderItemFn: RenderItemFn | null = null;
   public provideNodeFn: ProvideNodeFn | null = null;
   public onItemClickFn: OnItemClickFn | null = null;
+  public onItemLongPressFn: OnItemLongPressFn | null = null;
   public playItemAppearAnimationFn: PlayItemAppearAnimationFn | null = null;
   public getItemHeightFn: GetItemHeightFn | null = null;
   public getItemTypeIndexFn: GetItemTypeIndexFn | null = null;
@@ -1530,6 +1532,11 @@ export class VirtualScrollView extends Component {
     if (!itemScript.onClickCallback) {
       itemScript.onClickCallback = (idx: number) => {
         if (this.onItemClickFn) this.onItemClickFn(node, idx);
+      };
+    }
+    if (!itemScript.onLongPressCallback) {
+      itemScript.onLongPressCallback = (idx: number) => {
+        if (this.onItemLongPressFn) this.onItemLongPressFn(node, idx);
       };
     }
     itemScript.setDataIndex(index);

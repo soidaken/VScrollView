@@ -600,8 +600,10 @@
       "__expectedType__": "cc.Prefab"
     },
     "useDynamicSize": false,
-    "useDynamicHeight": false,
     "autoCenter": false,
+    "useDynamicHeight": false,
+    "columns": 1,
+    "columnSpacing": 0,
     "itemPrefabs": [],
     "gridCount": 1,
     "gridSpacing": 0,
