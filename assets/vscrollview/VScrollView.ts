@@ -835,7 +835,9 @@ export class VirtualScrollView extends Component {
 			this._recomputeContentSize();
 		}
 		this._slotFirstIndex = math.clamp(this._slotFirstIndex, 0, Math.max(0, this.totalCount - 1));
-		this._layoutSlots(this._slotFirstIndex, true);
+		if (!this.useDynamicSize) {
+			this._layoutSlots(this._slotFirstIndex, true);
+		}
 		this._updateVisible(true);
 	}
 
