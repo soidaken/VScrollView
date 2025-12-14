@@ -891,7 +891,7 @@ export class VirtualScrollView extends Component {
     }
   }
 
-  private _scrollToPosition(targetPos: number, animate = false) {
+  private _scrollToPosition(targetPos: number, animate = false, duration?: number) {
     targetPos = math.clamp(targetPos, this._boundsMin, this._boundsMax);
     if (this._scrollTween) {
       this._scrollTween.stop();
@@ -906,11 +906,12 @@ export class VirtualScrollView extends Component {
     } else {
       const currentPos = this._getContentMainPos();
       const distance = Math.abs(targetPos - currentPos);
-      const duration = Math.max(0.2, distance / 3000);
+      // 如果提供了 duration 则使用，否则根据距离自动计算
+      const finalDuration = duration !== undefined ? duration : Math.max(0.2, distance / 3000);
       const targetVec = this._isVertical() ? new Vec3(0, targetPos, 0) : new Vec3(targetPos, 0, 0);
       this._scrollTween = tween(this.content!)
         .to(
-          duration,
+          finalDuration,
           { position: targetVec },
           {
             easing: 'smooth',
@@ -928,17 +929,17 @@ export class VirtualScrollView extends Component {
     }
   }
 
-  public scrollToTop(animate = false) {
+  public scrollToTop(animate = false, duration?: number) {
     const target = this._isVertical() ? this._boundsMin : this._boundsMax;
-    this._scrollToPosition(target, animate);
+    this._scrollToPosition(target, animate, duration);
   }
 
-  public scrollToBottom(animate = false) {
+  public scrollToBottom(animate = false, duration?: number) {
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
-    this._scrollToPosition(target, animate);
+    this._scrollToPosition(target, animate, duration);
   }
 
-  public scrollToIndex(index: number, animate = false) {
+  public scrollToIndex(index: number, animate = false, duration?: number) {
     index = math.clamp(index | 0, 0, Math.max(0, this.totalCount - 1));
     let targetPos = 0;
 
@@ -956,7 +957,7 @@ export class VirtualScrollView extends Component {
       targetPos = -targetPos;
     }
 
-    this._scrollToPosition(targetPos, animate);
+    this._scrollToPosition(targetPos, animate, duration);
   }
 
   public onOffSortLayer(onoff: boolean) {
