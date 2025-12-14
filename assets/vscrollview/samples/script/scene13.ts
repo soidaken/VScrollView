@@ -3,8 +3,8 @@ import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
 
-@ccclass('scene1')
-export class scene1 extends Component {
+@ccclass('scene13')
+export class scene13 extends Component {
   @property(VirtualScrollView)
   vlist: VirtualScrollView | null = null;
 
@@ -43,14 +43,14 @@ export class scene1 extends Component {
       };
 
       //如果设置了子项点击回调,则会自动开启子项点击效果
-      this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
-        const tip = this.node.getChildByName('tip').getComponent(Label);
-        tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
-      };
+      // this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
+      //   const tip = this.node.getChildByName('tip').getComponent(Label);
+      //   tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
+      // };
 
-      this.vlist.onItemLongPressFn = (node: Node, index: number) => {
+      this.vlist.onPageChangeFn = (pageIndex: number) => {
         const tip = this.node.getChildByName('tip').getComponent(Label);
-        tip.string = `你长按了第${index + 1}项,内容:${this.data[index].data1}`;
+        tip.string = `当前PAGEVIEW :${pageIndex + 1}`;
       };
 
       this.vlist.refreshList(this.data);

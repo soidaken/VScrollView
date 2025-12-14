@@ -87,6 +87,8 @@ export type GetItemTypeIndexFn = (index: number) => number;
 export type OnRefreshStateChangeFn = (state: RefreshState, offset: number) => void;
 // 加载更多状态回调
 export type OnLoadMoreStateChangeFn = (state: LoadMoreState, offset: number) => void;
+// 分页吸附回调
+export type OnPageChangeFn = (pageIndex: number) => void;
 
 export enum ScrollDirection {
   VERTICAL = 0,
@@ -157,6 +159,42 @@ export class VirtualScrollView extends Component {
     },
   })
   public autoCenter: boolean = false;
+
+  @property({
+    displayName: '启用分页吸附',
+    tooltip: '滚动结束后自动吸附到最近的 item 位置',
+  })
+  public enablePageSnap: boolean = false;
+
+  @property({
+    displayName: '===吸附动画时长',
+    tooltip: '吸附动画的持续时间（秒）',
+    range: [0.1, 1, 0.05],
+    visible(this: VirtualScrollView) {
+      return this.enablePageSnap;
+    },
+  })
+  public pageSnapDuration: number = 0.15;
+
+  @property({
+    displayName: '===切页距离比例',
+    tooltip: '滑动距离超过页面尺寸的此比例时翻页（0.1-0.5）',
+    range: [0.1, 0.5, 0.05],
+    visible(this: VirtualScrollView) {
+      return this.enablePageSnap;
+    },
+  })
+  public pageSnapDistanceRatio: number = 0.15;
+
+  @property({
+    displayName: '===吸附触发速度',
+    tooltip: '惯性速度低于此值时触发吸附（越大越早吸附）',
+    range: [50, 3000, 10],
+    visible(this: VirtualScrollView) {
+      return this.enablePageSnap;
+    },
+  })
+  public pageSnapTriggerVelocity: number = 600;
 
   @property({
     displayName: '不等高模式（已废弃,仅保持兼容）',
@@ -358,6 +396,7 @@ export class VirtualScrollView extends Component {
   public getItemTypeIndexFn: GetItemTypeIndexFn | null = null;
   public onRefreshStateChangeFn: OnRefreshStateChangeFn | null = null;
   public onLoadMoreStateChangeFn: OnLoadMoreStateChangeFn | null = null;
+  public onPageChangeFn: OnPageChangeFn | null = null;
 
   private _viewportSize = 0;
   private _contentSize = 0;
@@ -387,6 +426,10 @@ export class VirtualScrollView extends Component {
   private _isRefreshing: boolean = false;
   private _isLoadingMore: boolean = false;
   private _hasMore: boolean = true; // 是否还有更多数据
+
+  // 分页吸附相关
+  private _currentPageIndex: number = 0;
+  private _pageStartPos: number = 0; // 记录触摸开始时的位置
 
   private _touchStartPos: Vec2 = new Vec2();
   private _hasDeterminedScrollDirection: boolean = false;
@@ -732,6 +775,14 @@ export class VirtualScrollView extends Component {
     }
 
     this._velocity += a * dt;
+
+    // 分页吸附模式：使用单独的速度阈值
+    if (this.enablePageSnap && Math.abs(this._velocity) < this.pageSnapTriggerVelocity && a === 0) {
+      this._velocity = 0;
+      this._performPageSnap();
+      return;
+    }
+
     if (Math.abs(this._velocity) < this.velocitySnap && a === 0) this._velocity = 0;
     if (this._velocity !== 0) {
       pos += this._velocity * dt;
@@ -1051,6 +1102,11 @@ export class VirtualScrollView extends Component {
     this._hasDeterminedScrollDirection = false;
     this._shouldBlockParent = false;
 
+    // 分页模式：记录触摸开始时的内容位置
+    if (this.enablePageSnap) {
+      this._pageStartPos = this._getContentMainPos();
+    }
+
     this._stopTouchEvent(e);
     this._isTouching = true;
     this._velocity = 0;
@@ -1240,6 +1296,11 @@ export class VirtualScrollView extends Component {
       this._velocity = 0;
     }
     this._velSamples.length = 0;
+
+    // 分页吸附模式：根据滑动距离判断翻页
+    if (this.enablePageSnap) {
+      this._performPageSnapByDistance();
+    }
   }
 
   // 更新刷新状态
@@ -1611,6 +1672,216 @@ export class VirtualScrollView extends Component {
     } else {
       this._boundsMin = -Math.max(0, this._contentSize - this._viewportSize);
       this._boundsMax = 0;
+    }
+  }
+
+  /**
+   * 获取当前页索引
+   */
+  public getCurrentPageIndex(): number {
+    return this._currentPageIndex;
+  }
+
+  /**
+   * 滚动到指定页
+   */
+  public scrollToPage(pageIndex: number, animate: boolean = true) {
+    if (!this.enablePageSnap) {
+      console.warn('[VScrollView] 未启用分页吸附模式');
+      return;
+    }
+
+    const maxPage = this._getMaxPageIndex();
+    pageIndex = math.clamp(pageIndex, 0, maxPage);
+
+    const targetPos = this._getPagePosition(pageIndex);
+    this._scrollToPosition(targetPos, animate, this.pageSnapDuration);
+
+    this._updateCurrentPage(pageIndex);
+  }
+
+  /**
+   * 获取最大页索引
+   */
+  private _getMaxPageIndex(): number {
+    if (this.useDynamicSize) {
+      return Math.max(0, this.totalCount - 1);
+    } else {
+      const totalLines = Math.ceil(this.totalCount / this.gridCount);
+      return Math.max(0, totalLines - 1);
+    }
+  }
+
+  /**
+   * 根据当前位置计算最近的页索引
+   */
+  private _getNearestPageIndex(): number {
+    const pos = this._getContentMainPos();
+    const searchPos = this._isVertical() ? pos : -pos;
+
+    if (this.useDynamicSize) {
+      // 不等大小模式：根据 item 的中心位置判断
+      let nearestIdx = 0;
+      let minDist = Infinity;
+
+      for (let i = 0; i < this.totalCount; i++) {
+        const itemStart = this._prefixPositions[i];
+        const itemSize = this._itemSizes[i];
+        const itemCenter = itemStart + itemSize / 2;
+        const dist = Math.abs(searchPos - itemStart);
+
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIdx = i;
+        }
+      }
+      return nearestIdx;
+    } else {
+      // 等大小模式：根据行/列计算
+      const stride = this.itemMainSize + this.spacing;
+      const adjustedPos = Math.max(0, searchPos - this.headerSpacing);
+      const line = Math.round(adjustedPos / stride);
+      return math.clamp(line, 0, this._getMaxPageIndex());
+    }
+  }
+
+  /**
+   * 根据页索引计算目标位置
+   */
+  private _getPagePosition(pageIndex: number): number {
+    let targetPos = 0;
+
+    if (this.useDynamicSize) {
+      targetPos = this._prefixPositions[pageIndex] || 0;
+    } else {
+      targetPos = this.headerSpacing + pageIndex * (this.itemMainSize + this.spacing);
+    }
+
+    // 横向模式取负值
+    if (!this._isVertical()) {
+      targetPos = -targetPos;
+    }
+
+    // 限制在边界范围内
+    return math.clamp(targetPos, this._boundsMin, this._boundsMax);
+  }
+
+  /**
+   * 更新当前页并触发回调
+   */
+  private _updateCurrentPage(pageIndex: number) {
+    if (this._currentPageIndex !== pageIndex) {
+      this._currentPageIndex = pageIndex;
+      if (this.onPageChangeFn) {
+        this.onPageChangeFn(pageIndex);
+      }
+    }
+  }
+
+  /**
+   * 执行分页吸附
+   */
+  private _performPageSnap() {
+    if (!this.enablePageSnap) return;
+
+    // 如果正在 tween 吸附中，不重复执行
+    if (this._scrollTween) return;
+
+    const nearestPage = this._getNearestPageIndex();
+    const targetPage = math.clamp(nearestPage, 0, this._getMaxPageIndex());
+
+    const targetPos = this._getPagePosition(targetPage);
+    const currentPos = this._getContentMainPos();
+
+    // 如果已经在目标位置，只更新页码
+    if (Math.abs(targetPos - currentPos) < 1) {
+      this._updateCurrentPage(targetPage);
+      return;
+    }
+
+    this._velocity = 0;
+    this._scrollToPosition(targetPos, true, this.pageSnapDuration);
+
+    this._updateCurrentPage(targetPage);
+  }
+  /**
+   * 根据滑动距离执行分页吸附
+   */
+  private _performPageSnapByDistance() {
+    if (!this.enablePageSnap) return;
+    if (this._scrollTween) return;
+
+    const currentPos = this._getContentMainPos();
+    const dragDistance = currentPos - this._pageStartPos; // 滑动距离
+
+    // 获取当前页的尺寸
+    const pageSize = this._getCurrentPageSize();
+
+    // 判断翻页的距离阈值
+    const threshold = pageSize * this.pageSnapDistanceRatio;
+
+    // 基于当前页索引计算目标页
+    let targetPage = this._currentPageIndex;
+    const maxPage = this._getMaxPageIndex();
+
+    if (this._isVertical()) {
+      // 纵向：dragDistance > 0 表示向下滑（看上一页），< 0 表示向上滑（看下一页）
+      if (dragDistance > threshold) {
+        targetPage = this._currentPageIndex - 1;
+      } else if (dragDistance < -threshold) {
+        targetPage = this._currentPageIndex + 1;
+      }
+    } else {
+      // 横向：dragDistance < 0 表示向左滑（看下一页），> 0 表示向右滑（看上一页）
+      if (dragDistance < -threshold) {
+        targetPage = this._currentPageIndex + 1;
+      } else if (dragDistance > threshold) {
+        targetPage = this._currentPageIndex - 1;
+      }
+    }
+
+    // 限制范围
+    targetPage = math.clamp(targetPage, 0, maxPage);
+
+    const targetPos = this._getPagePosition(targetPage);
+
+    // 如果已经在目标位置，只更新页码
+    if (Math.abs(targetPos - currentPos) < 1) {
+      this._updateCurrentPage(targetPage);
+      this._velocity = 0;
+      return;
+    }
+
+    this._velocity = 0;
+    this._scrollToPosition(targetPos, true, this.pageSnapDuration);
+    this._updateCurrentPage(targetPage);
+  }
+
+  /**
+   * 获取当前页的尺寸
+   */
+  private _getCurrentPageSize(): number {
+    if (this.useDynamicSize) {
+      const pageIndex = math.clamp(this._currentPageIndex, 0, this.totalCount - 1);
+      return this._itemSizes[pageIndex] || 100;
+    } else {
+      return this.itemMainSize + this.spacing;
+    }
+  }
+
+  /**
+   * 根据位置计算页索引
+   */
+  private _getPageIndexByPosition(pos: number): number {
+    const searchPos = this._isVertical() ? pos : -pos;
+
+    if (this.useDynamicSize) {
+      return this._posToFirstIndex(searchPos);
+    } else {
+      const stride = this.itemMainSize + this.spacing;
+      const adjustedPos = Math.max(0, searchPos - this.headerSpacing);
+      const line = Math.floor(adjustedPos / stride);
+      return math.clamp(line, 0, this._getMaxPageIndex());
     }
   }
 }

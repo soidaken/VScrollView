@@ -5,7 +5,7 @@
   },
   "preview": {
     "current": {
-      "platform": "gameView"
+      "platform": "browser"
     }
   }
 }
