@@ -1827,9 +1827,9 @@ export class VirtualScrollView extends Component {
     if (this._isVertical()) {
       // 纵向：dragDistance > 0 表示向下滑（看上一页），< 0 表示向上滑（看下一页）
       if (dragDistance > threshold) {
-        targetPage = this._currentPageIndex - 1;
-      } else if (dragDistance < -threshold) {
         targetPage = this._currentPageIndex + 1;
+      } else if (dragDistance < -threshold) {
+        targetPage = this._currentPageIndex - 1;
       }
     } else {
       // 横向：dragDistance < 0 表示向左滑（看下一页），> 0 表示向右滑（看上一页）
