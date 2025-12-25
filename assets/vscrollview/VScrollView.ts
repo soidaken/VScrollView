@@ -23,12 +23,17 @@ const { ccclass, property, menu } = _decorator;
 class InternalNodePool {
   private pools: Map<number, Node[]> = new Map();
   private prefabs: Prefab[] = [];
+  private nodes: Node[] = [];
+  private useNodeMode: boolean = false;
 
-  constructor(prefabs: Prefab[]) {
+  constructor(prefabs: Prefab[], nodes?: Node[]) {
     this.prefabs = prefabs;
-    prefabs.forEach((_, index) => {
-      this.pools.set(index, []);
-    });
+    this.nodes = nodes || [];
+    this.useNodeMode = nodes && nodes.length > 0;
+    const count = this.useNodeMode ? nodes.length : prefabs.length;
+    for (let i = 0; i < count; i++) {
+      this.pools.set(i, []);
+    }
   }
 
   get(typeIndex: number): Node {
@@ -42,7 +47,22 @@ class InternalNodePool {
       node.active = true;
       return node;
     }
-    const newNode = instantiate(this.prefabs[typeIndex]);
+    let newNode: Node;
+    if (this.useNodeMode) {
+      const sourceNode = this.nodes[typeIndex];
+      if (!sourceNode) {
+        console.error(`[VScrollView NodePool] Node 类型 ${typeIndex} 模板不存在`);
+        return null;
+      }
+      newNode = instantiate(sourceNode);
+    } else {
+      const sourcePrefab = this.prefabs[typeIndex];
+      if (!sourcePrefab) {
+        console.error(`[VScrollView NodePool] Prefab 类型 ${typeIndex} 模板不存在`);
+        return null;
+      }
+      newNode = instantiate(sourcePrefab);
+    }
     return newNode;
   }
 
@@ -95,6 +115,11 @@ export enum ScrollDirection {
   HORIZONTAL = 1,
 }
 
+export enum ItemCreationMode {
+  NODE = 0,
+  PREFAB = 1,
+}
+
 // 添加刷新状态枚举
 export enum RefreshState {
   IDLE = 0, // 空闲状态
@@ -133,11 +158,31 @@ export class VirtualScrollView extends Component {
   public direction: ScrollDirection = ScrollDirection.VERTICAL;
 
   @property({
+    type: Enum(ItemCreationMode),
+    displayName: '创建模式',
+    tooltip: '使用 Node 或 Prefab 创建子项（默认 Prefab）',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList;
+    },
+  })
+  public itemCreationMode: ItemCreationMode = ItemCreationMode.PREFAB;
+
+  @property({
+    type: Node,
+    displayName: '子项节点',
+    tooltip: '可选：从 Node 创建 item（等大小模式）',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList && !this.useDynamicSize && this.itemCreationMode === ItemCreationMode.NODE;
+    },
+  })
+  public itemNode: Node | null = null;
+
+  @property({
     type: Prefab,
     displayName: '子项预制体',
     tooltip: '可选：从 Prefab 创建 item（等大小模式）',
     visible(this: VirtualScrollView) {
-      return this.useVirtualList && !this.useDynamicSize;
+      return this.useVirtualList && !this.useDynamicSize && this.itemCreationMode === ItemCreationMode.PREFAB;
     },
   })
   public itemPrefab: Prefab | null = null;
@@ -215,11 +260,21 @@ export class VirtualScrollView extends Component {
   public columnSpacing: number = 0;
 
   @property({
+    type: [Node],
+    displayName: '子项节点数组',
+    tooltip: '不等大小模式：预先提供的子项节点数组（可在编辑器拖入）',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList && this.useDynamicSize && this.itemCreationMode === ItemCreationMode.NODE;
+    },
+  })
+  public itemNodes: Node[] = [];
+
+  @property({
     type: [Prefab],
     displayName: '子项预制体数组',
     tooltip: '不等大小模式：预先提供的子项预制体数组（可在编辑器拖入）',
     visible(this: VirtualScrollView) {
-      return this.useVirtualList && this.useDynamicSize;
+      return this.useVirtualList && this.useDynamicSize && this.itemCreationMode === ItemCreationMode.PREFAB;
     },
   })
   public itemPrefabs: Prefab[] = [];
@@ -362,9 +417,9 @@ export class VirtualScrollView extends Component {
   @property({ displayName: '像素对齐', tooltip: '是否启用像素对齐' })
   public pixelAlign: boolean = true;
 
-  @property({ 
-    displayName: '禁用越界滚动', 
-    tooltip: '是否禁用越界滚动（开启后将无法滚动到边界之外）' 
+  @property({
+    displayName: '禁用越界滚动',
+    tooltip: '是否禁用越界滚动（开启后将无法滚动到边界之外）'
   })
   public disableBounce: boolean = false;
 
@@ -553,6 +608,18 @@ export class VirtualScrollView extends Component {
       this._templateNode.destroy();
       this._templateNode = null;
     }
+
+    if (this.itemNode) {
+      this.itemNode.destroy();
+      this.itemNode = null;
+    }
+
+    if (this.itemNodes) {
+      for (let i = this.itemNodes.length - 1; i >= 0; i--) {
+        this.itemNodes[i].destroy();
+        this.itemNodes[i] = null;
+      }
+    }
   }
 
   private _bindTouch() {
@@ -577,12 +644,20 @@ export class VirtualScrollView extends Component {
   private async _initFixedSizeMode() {
     if (!this.provideNodeFn) {
       this.provideNodeFn = (index: number) => {
-        // 优先使用 itemPrefab
+        // Node 模式
+        if (this.itemCreationMode === ItemCreationMode.NODE) {
+          if (this.itemNode) return instantiate(this.itemNode);
+          if (this._templateNode) return instantiate(this._templateNode);
+        }
+        // Prefab 模式
+        if (this.itemCreationMode === ItemCreationMode.PREFAB) {
+          if (this.itemPrefab) return instantiate(this.itemPrefab);
+        }
+        // 兼容旧版本：如果没有设置模式，尝试 itemPrefab 或模板节点
         if (this.itemPrefab) return instantiate(this.itemPrefab);
-        // 其次使用模板节点
         if (this._templateNode) return instantiate(this._templateNode);
         // 都没有则警告并创建默认节点
-        console.warn('[VirtualScrollView] 没有提供 itemPrefab 或模板节点');
+        console.warn('[VirtualScrollView] 没有提供 itemNode/itemPrefab 或模板节点');
         const n = new Node('item-auto-create');
         const size = this._isVertical() ? this._viewportTf.width : this._viewportTf.height;
         n.addComponent(UITransform).setContentSize(this._isVertical() ? size : this.itemMainSize, this._isVertical() ? this.itemMainSize : size);
@@ -630,32 +705,61 @@ export class VirtualScrollView extends Component {
         this._itemSizes.push(this.getItemHeightFn(i));
       }
       this._buildPrefixSum();
-      if (this.itemPrefabs.length > 0) {
-        console.log('[VirtualScrollView] 初始化节点池');
+      // Node 模式
+      if (this.itemCreationMode === ItemCreationMode.NODE && this.itemNodes.length > 0) {
+        console.log('[VirtualScrollView] 初始化节点池（Node 模式）');
+        this._nodePool = new InternalNodePool([], this.itemNodes);
+      }
+      // Prefab 模式
+      else if (this.itemCreationMode === ItemCreationMode.PREFAB && this.itemPrefabs.length > 0) {
+        console.log('[VirtualScrollView] 初始化节点池（Prefab 模式）');
+        this._nodePool = new InternalNodePool(this.itemPrefabs);
+      }
+      // 兼容旧版本
+      else if (this.itemPrefabs.length > 0) {
+        console.log('[VirtualScrollView] 初始化节点池（兼容模式）');
         this._nodePool = new InternalNodePool(this.itemPrefabs);
       } else {
-        console.error('[VirtualScrollView] 需要至少一个 itemPrefab');
+        console.error('[VirtualScrollView] 需要至少一个 itemNode 或 itemPrefab');
         return;
       }
       this._initDynamicSlots();
       return;
     }
-    if (this.itemPrefabs.length === 0 || !this.getItemTypeIndexFn) {
+    // Node 模式
+    const useNodeMode = this.itemCreationMode === ItemCreationMode.NODE;
+    const hasNodes = this.itemNodes.length > 0;
+    const hasPrefabs = this.itemPrefabs.length > 0;
+
+    if ((useNodeMode && !hasNodes && !hasPrefabs) || (!useNodeMode && !hasPrefabs) || !this.getItemTypeIndexFn) {
       console.error(
-        '[VirtualScrollView] 不等大小模式必须提供以下之一：\n1. getItemHeightFn 回调函数\n2. itemPrefabs 数组 + getItemTypeIndexFn 回调函数'
+        '[VirtualScrollView] 不等大小模式必须提供以下之一：\n1. getItemHeightFn 回调函数\n2. itemNodes/itemPrefabs 数组 + getItemTypeIndexFn 回调函数'
       );
       return;
     }
-    console.log('[VirtualScrollView] 使用采样模式（从 itemPrefabs 采样尺寸）');
-    this._nodePool = new InternalNodePool(this.itemPrefabs);
+
+    // 根据模式选择模板源
+    const templates = useNodeMode && hasNodes ? this.itemNodes : this.itemPrefabs;
+    const modeName = useNodeMode && hasNodes ? 'Node' : 'Prefab';
+
+    console.log(`[VirtualScrollView] 使用采样模式（从 ${modeName} 采样尺寸）`);
+
+    // 初始化节点池
+    if (useNodeMode && hasNodes) {
+      this._nodePool = new InternalNodePool([], this.itemNodes);
+    } else {
+      this._nodePool = new InternalNodePool(this.itemPrefabs);
+    }
+
     this._prefabSizeCache.clear();
-    for (let i = 0; i < this.itemPrefabs.length; i++) {
-      const sampleNode = instantiate(this.itemPrefabs[i]);
+    for (let i = 0; i < templates.length; i++) {
+      const template = templates[i];
+      const sampleNode = instantiate(template as any);
       const uit = sampleNode.getComponent(UITransform);
       const size = this._isVertical() ? uit?.height || 100 : uit?.width || 100;
       this._prefabSizeCache.set(i, size);
       sampleNode.destroy();
-      console.log(`[VirtualScrollView] 预制体[${i}] 采样尺寸: ${size}`);
+      console.log(`[VirtualScrollView] ${modeName}[${i}] 采样尺寸: ${size}`);
     }
     this._itemSizes = [];
     for (let i = 0; i < this.totalCount; i++) {
@@ -804,12 +908,12 @@ export class VirtualScrollView extends Component {
     if (Math.abs(this._velocity) < this.velocitySnap && a === 0) this._velocity = 0;
     if (this._velocity !== 0) {
       pos += this._velocity * dt;
-      
+
       // 如果禁用越界滚动，限制位置在边界内
       if (this.disableBounce) {
         pos = math.clamp(pos, minBound, maxBound);
       }
-      
+
       if (this.pixelAlign) pos = Math.round(pos);
       this._setContentMainPos(pos);
       if (this.useVirtualList) this._updateVisible(false);
@@ -1647,7 +1751,7 @@ export class VirtualScrollView extends Component {
     }
   }
 
-  private _playDefaultItemAppearAnimation(node: Node, index: number) {}
+  private _playDefaultItemAppearAnimation(node: Node, index: number) { }
 
   private _updateItemClickHandler(node: Node, index: number) {
     if (!this.useVirtualList) return;
