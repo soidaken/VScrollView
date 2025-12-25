@@ -362,6 +362,12 @@ export class VirtualScrollView extends Component {
   @property({ displayName: '像素对齐', tooltip: '是否启用像素对齐' })
   public pixelAlign: boolean = true;
 
+  @property({ 
+    displayName: '禁用越界滚动', 
+    tooltip: '是否禁用越界滚动（开启后将无法滚动到边界之外）' 
+  })
+  public disableBounce: boolean = false;
+
   @property({
     displayName: '惯性阻尼系数',
     tooltip: '指数衰减系数，越大减速越快',
@@ -760,8 +766,20 @@ export class VirtualScrollView extends Component {
       const loadPos = this._isVertical() ? this._boundsMax + this.loadMoreThreshold : this._boundsMin - this.loadMoreThreshold;
       a = -this.springK * (pos - loadPos) - this.springC * this._velocity;
     } else if (pos < minBound) {
+      // 如果禁用越界滚动，直接限制位置并停止速度
+      if (this.disableBounce) {
+        this._setContentMainPos(minBound);
+        this._velocity = 0;
+        return;
+      }
       a = -this.springK * (pos - minBound) - this.springC * this._velocity;
     } else if (pos > maxBound) {
+      // 如果禁用越界滚动，直接限制位置并停止速度
+      if (this.disableBounce) {
+        this._setContentMainPos(maxBound);
+        this._velocity = 0;
+        return;
+      }
       a = -this.springK * (pos - maxBound) - this.springC * this._velocity;
     } else {
       if (this.useIOSDecelerationCurve) {
@@ -786,6 +804,12 @@ export class VirtualScrollView extends Component {
     if (Math.abs(this._velocity) < this.velocitySnap && a === 0) this._velocity = 0;
     if (this._velocity !== 0) {
       pos += this._velocity * dt;
+      
+      // 如果禁用越界滚动，限制位置在边界内
+      if (this.disableBounce) {
+        pos = math.clamp(pos, minBound, maxBound);
+      }
+      
       if (this.pixelAlign) pos = Math.round(pos);
       this._setContentMainPos(pos);
       if (this.useVirtualList) this._updateVisible(false);
@@ -1224,6 +1248,17 @@ export class VirtualScrollView extends Component {
         } else {
           this._updateLoadMoreState(LoadMoreState.PULLING, this._loadOffset);
         }
+      }
+    }
+
+    // 如果禁用越界滚动，限制位置在边界内
+    if (this.disableBounce) {
+      const newPos = pos + finalDelta;
+      // 不允许越界，直接限制在边界范围内
+      if (newPos < minBound) {
+        finalDelta = minBound - pos;
+      } else if (newPos > maxBound) {
+        finalDelta = maxBound - pos;
       }
     }
 
