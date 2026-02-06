@@ -1,23 +1,24 @@
 import {
   _decorator,
   Component,
-  Node,
-  UITransform,
-  instantiate,
-  Prefab,
+  Enum,
+  EventMouse,
   EventTouch,
-  Vec3,
-  math,
-  Mask,
-  Vec2,
-  tween,
-  Tween,
   input,
   Input,
-  Enum,
+  instantiate,
+  Mask,
+  math,
+  Node,
+  Prefab,
+  tween,
+  UITransform,
+  Vec2,
+  Vec3,
+  Widget,
 } from 'cc';
 import { VScrollViewItem } from './VScrollViewItem';
-import { Widget } from 'cc';
+
 const { ccclass, property, menu } = _decorator;
 
 class InternalNodePool {
@@ -448,6 +449,19 @@ export class VirtualScrollView extends Component {
   @property({ displayName: 'iOS减速曲线', tooltip: '是否使用 iOS 风格的减速曲线' })
   public useIOSDecelerationCurve: boolean = true;
 
+  @property({ displayName: '启用滚轮', tooltip: '是否启用鼠标滚轮滚动' })
+  public enableMouseWheel: boolean = true;
+
+  @property({
+    displayName: '滚轮速度',
+    tooltip: '鼠标滚轮滚动速度',
+    range: [0.1, 10, 0.1],
+    visible(this: VirtualScrollView) {
+      return this.enableMouseWheel;
+    },
+  })
+  public mouseWheelSpeed: number = 3.0;
+
   public renderItemFn: RenderItemFn | null = null;
   public provideNodeFn: ProvideNodeFn | null = null;
   public onItemClickFn: OnItemClickFn | null = null;
@@ -491,6 +505,7 @@ export class VirtualScrollView extends Component {
   // 分页吸附相关
   private _currentPageIndex: number = 0;
   private _pageStartPos: number = 0; // 记录触摸开始时的位置
+  private _lastWheelTime: number = 0; // 记录上次滚轮时间
 
   private _touchStartPos: Vec2 = new Vec2();
   private _hasDeterminedScrollDirection: boolean = false;
@@ -598,6 +613,7 @@ export class VirtualScrollView extends Component {
     this.node.off(Node.EventType.TOUCH_MOVE, this._onMove, this);
     this.node.off(Node.EventType.TOUCH_END, this._onUp, this);
     this.node.off(Node.EventType.TOUCH_CANCEL, this._onUp, this);
+    this.node.off(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
     if (this._nodePool) {
       this._nodePool.clear();
       this._nodePool = null;
@@ -627,6 +643,46 @@ export class VirtualScrollView extends Component {
     this.node.on(Node.EventType.TOUCH_MOVE, this._onMove, this);
     this.node.on(Node.EventType.TOUCH_END, this._onUp, this);
     this.node.on(Node.EventType.TOUCH_CANCEL, this._onUp, this);
+    if (this.enableMouseWheel) {
+      this.node.on(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+    }
+  }
+
+  private _onMouseWheel(e: EventMouse) {
+    if (!this.enableMouseWheel) return;
+    const scrollY = e.getScrollY();
+    if (scrollY === 0) return;
+
+    if (this.enablePageSnap) {
+      // 分页模式下，让滚轮也触发翻页
+      const now = performance.now();
+      // 阈值判断和冷却时间，避免部分设备（如触控板）过快跳页
+      if (now - this._lastWheelTime < 150) return;
+      if (Math.abs(scrollY) < 1) return;
+
+      this._lastWheelTime = now;
+      const pageOffset = scrollY > 0 ? -1 : 1;
+      const targetPage = math.clamp(this._currentPageIndex + pageOffset, 0, this._getMaxPageIndex());
+
+      if (targetPage !== this._currentPageIndex) {
+        this.scrollToPage(targetPage, true);
+      }
+      return;
+    }
+
+    if (this._isVertical()) {
+      // 默认 scrollY 为正代表向上滚（手指向上拨动，看上面的内容）
+      // 在纵向模式下，pos 增加代表视口向下移动。
+      // 所以滚轮 Y 为正（向上滚）应该让 pos 减小。
+      this._velocity = -scrollY * this.mouseWheelSpeed;
+    } else {
+      // 在横向模式下，pos 增加代表视口向左移动（看左边的内容）。
+      // 滚轮 Y 为正（向上/向左滚）应该让 pos 增加。
+      this._velocity = scrollY * this.mouseWheelSpeed;
+    }
+
+    // 限制最大速度
+    this._velocity = math.clamp(this._velocity, -this.maxVelocity, this.maxVelocity);
   }
 
   private _bindGlobalTouch() {
@@ -1136,6 +1192,10 @@ export class VirtualScrollView extends Component {
       targetPos = -targetPos;
     }
 
+    if (this.enablePageSnap) {
+      this._updateCurrentPage(this._getPageIndexByPosition(targetPos));
+    }
+
     this._scrollToPosition(targetPos, animate, duration);
   }
 
@@ -1196,6 +1256,10 @@ export class VirtualScrollView extends Component {
 
     if (!this._isVertical()) {
       targetPos = -targetPos;
+    }
+
+    if (this.enablePageSnap) {
+      this._updateCurrentPage(this._getPageIndexByPosition(targetPos));
     }
 
     this._flashToPosition(targetPos);

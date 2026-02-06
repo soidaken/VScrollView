@@ -19,3 +19,4 @@ Thumbs.db
 # === 临时脚本或锁文件（可选）===
 package-lock.json
 yarn.lock
+.idea
