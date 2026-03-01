@@ -142,6 +142,8 @@ export enum LoadMoreState {
 @ccclass('VirtualScrollView')
 @menu('2D/VirtualScrollView(虚拟滚动列表)')
 export class VirtualScrollView extends Component {
+  private static _activeNestedChild: VirtualScrollView | null = null;
+
   @property({ type: Node, displayName: '容器节点', tooltip: 'content 容器节点（在 Viewport 下）' })
   public content: Node | null = null;
 
@@ -425,6 +427,15 @@ export class VirtualScrollView extends Component {
   public disableBounce: boolean = false;
 
   @property({
+    displayName: '嵌套时拦截父滚动',
+    tooltip: '嵌套虚拟列表时，子列表可处理当前手势则拦截父级滚动',
+    visible(this: VirtualScrollView) {
+      return this.useVirtualList;
+    },
+  })
+  public blockParentScroll: boolean = true;
+
+  @property({
     displayName: '惯性阻尼系数',
     tooltip: '指数衰减系数，越大减速越快',
     range: [0, 10, 0.5],
@@ -510,6 +521,7 @@ export class VirtualScrollView extends Component {
   private _touchStartPos: Vec2 = new Vec2();
   private _hasDeterminedScrollDirection: boolean = false;
   private _shouldBlockParent: boolean = false;
+  private _parentScrollView: VirtualScrollView | null = null;
   private _scrollDirectionThreshold: number = 15; // 滑动阈值（像素）
   private _scrollAngleThreshold: number = 30; // 角度阈值（度）
 
@@ -537,6 +549,89 @@ export class VirtualScrollView extends Component {
     return this.direction === ScrollDirection.VERTICAL;
   }
 
+  private _findParentScrollView(): VirtualScrollView | null {
+    let parent = this.node.parent;
+    while (parent) {
+      const sv = parent.getComponent(VirtualScrollView);
+      if (sv) return sv;
+      parent = parent.parent;
+    }
+    return null;
+  }
+
+  private _ensureParentScrollView(): VirtualScrollView | null {
+    if (!this.blockParentScroll) return null;
+    if (this._parentScrollView && this._parentScrollView.node && this._parentScrollView.node.isValid) {
+      return this._parentScrollView;
+    }
+    this._parentScrollView = this._findParentScrollView();
+    return this._parentScrollView;
+  }
+
+  private _cancelTouchTrackingFromChild() {
+    this._isTouching = false;
+    this._velocity = 0;
+    this._velSamples.length = 0;
+    this._hasDeterminedScrollDirection = false;
+    this._shouldBlockParent = false;
+    this._releaseNestedTouchOwner();
+  }
+
+  private _acquireNestedTouchOwner() {
+    if (!this.blockParentScroll) return;
+    const parent = this._ensureParentScrollView();
+    if (!parent) return;
+    const owner = VirtualScrollView._activeNestedChild;
+    if (owner && owner !== this && owner._parentScrollView === parent) {
+      owner._cancelTouchTrackingFromChild();
+    }
+    VirtualScrollView._activeNestedChild = this;
+  }
+
+  private _releaseNestedTouchOwner() {
+    if (VirtualScrollView._activeNestedChild === this) {
+      VirtualScrollView._activeNestedChild = null;
+    }
+  }
+
+  private _isMovingTowardStart(delta: number): boolean {
+    // 与原有滚动物理保持一致：
+    // vertical: delta > 0 视为 towardStart
+    // horizontal: delta < 0 视为 towardStart
+    return this._isVertical() ? delta > 0 : delta < 0;
+  }
+
+  private _isMovingTowardEnd(delta: number): boolean {
+    // 与原有滚动物理保持一致：
+    // vertical: delta < 0 视为 towardEnd
+    // horizontal: delta > 0 视为 towardEnd
+    return this._isVertical() ? delta < 0 : delta > 0;
+  }
+
+  private _canHandleMainAxisDelta(delta: number): boolean {
+    if (delta === 0) return false;
+    const minBound = Math.min(this._boundsMin, this._boundsMax);
+    const maxBound = Math.max(this._boundsMin, this._boundsMax);
+    const pos = this._getContentMainPos();
+    const atStartBound = this._isVertical() ? pos <= minBound : pos >= maxBound;
+    const atEndBound = this._isVertical() ? pos >= maxBound : pos <= minBound;
+    const movingToStart = this._isMovingTowardStart(delta);
+    const movingToEnd = this._isMovingTowardEnd(delta);
+
+    if (Math.abs(maxBound - minBound) <= 0.001) {
+      // 无可滚动空间时，towardEnd 对应刷新方向，towardStart 对应加载方向
+      if (movingToEnd) return this.enablePullRefresh;
+      if (movingToStart) return this.enableLoadMore && this._hasMore;
+      return false;
+    }
+    if (!atStartBound && !atEndBound) return true;
+    if (atStartBound && movingToEnd) return true;
+    if (atEndBound && movingToStart) return true;
+    if (atStartBound && movingToStart) return this.enablePullRefresh;
+    if (atEndBound && movingToEnd) return this.enableLoadMore && this._hasMore;
+    return false;
+  }
+
   private _getViewportMainSize(): number {
     return this._isVertical() ? this._viewportTf.height : this._viewportTf.width;
   }
@@ -561,6 +656,7 @@ export class VirtualScrollView extends Component {
   async start() {
     this.content = this._getContentNode();
     if (!this.content) return;
+    this._parentScrollView = this._findParentScrollView();
     const mask = this.node.getComponent(Mask);
     if (!mask) console.warn('[VirtualScrollView] 建议在视窗节点挂一个 Mask 组件用于裁剪');
     this.gridCount = Math.max(1, Math.round(this.gridCount));
@@ -607,6 +703,7 @@ export class VirtualScrollView extends Component {
   }
 
   onDestroy() {
+    this._releaseNestedTouchOwner();
     input.off(Input.EventType.TOUCH_END, this._onGlobalTouchEnd, this);
     input.off(Input.EventType.TOUCH_CANCEL, this._onGlobalTouchEnd, this);
     this.node.off(Node.EventType.TOUCH_START, this._onDown, this);
@@ -652,6 +749,14 @@ export class VirtualScrollView extends Component {
     if (!this.enableMouseWheel) return;
     const scrollY = e.getScrollY();
     if (scrollY === 0) return;
+    const hasParent = !!this._ensureParentScrollView();
+    const wheelMainDelta = this._isVertical() ? -scrollY : scrollY;
+    const sameAxisWithParent =
+      hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
+    if (hasParent && this.blockParentScroll && (!sameAxisWithParent || this._canHandleMainAxisDelta(wheelMainDelta))) {
+      e.propagationStopped = true;
+      this._parentScrollView?._cancelTouchTrackingFromChild();
+    }
 
     if (this.enablePageSnap) {
       // 分页模式下，让滚轮也触发翻页
@@ -692,7 +797,6 @@ export class VirtualScrollView extends Component {
 
   private _onGlobalTouchEnd(event: EventTouch) {
     if (this._isTouching) {
-      console.log('[VScrollView] Global touch end detected');
       this._onUp(event);
     }
   }
@@ -1280,21 +1384,19 @@ export class VirtualScrollView extends Component {
 
   private _stopTouchEvent(e?: EventTouch) {
     if (!e) return;
-
-    // 如果已经确定要阻止父级，直接阻止
-    if (this._shouldBlockParent) {
+    if (this.blockParentScroll && this._shouldBlockParent) {
       e.propagationStopped = true;
     }
   }
 
   private _onDown(e: EventTouch) {
-    // 记录触摸起始位置
     const uiPos = e.getUILocation(this._touchStartPos);
     this._touchStartPos.set(uiPos);
     this._hasDeterminedScrollDirection = false;
     this._shouldBlockParent = false;
+    this._ensureParentScrollView();
+    this._acquireNestedTouchOwner();
 
-    // 分页模式：记录触摸开始时的内容位置
     if (this.enablePageSnap) {
       this._pageStartPos = this._getContentMainPos();
     }
@@ -1314,80 +1416,67 @@ export class VirtualScrollView extends Component {
 
     const uiDelta = e.getUIDelta(this._tmpMoveVec2);
     const currentPos = e.getUILocation();
+    const hasParent = !!this._ensureParentScrollView();
 
-    // 第一次移动时判断滑动方向
     if (!this._hasDeterminedScrollDirection) {
       const deltaX = currentPos.x - this._touchStartPos.x;
       const deltaY = currentPos.y - this._touchStartPos.y;
       const totalDelta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-      // 超过距离阈值才判断方向
-      if (totalDelta > this._scrollDirectionThreshold) {
-        this._hasDeterminedScrollDirection = true;
+      if (totalDelta <= this._scrollDirectionThreshold) return;
 
-        // 计算滑动角度（相对于水平方向）
-        const angle = Math.abs((Math.atan2(deltaY, deltaX) * 180) / Math.PI);
+      this._hasDeterminedScrollDirection = true;
+      const angle = Math.abs((Math.atan2(deltaY, deltaX) * 180) / Math.PI);
+      const isVerticalScroll = angle > 90 - this._scrollAngleThreshold && angle < 90 + this._scrollAngleThreshold;
+      const isHorizontalScroll = angle < this._scrollAngleThreshold || angle > 180 - this._scrollAngleThreshold;
+      const isListVertical = this._isVertical();
+      const axisMatched = (isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll);
+      const delta = isListVertical ? uiDelta.y : uiDelta.x;
+      const sameAxisWithParent =
+        hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
 
-        // 判断是否为纵向滑动：角度在 [90° - 阈值, 90° + 阈值] 范围内
-        const isVerticalScroll = angle > 90 - this._scrollAngleThreshold && angle < 90 + this._scrollAngleThreshold;
+      if (!axisMatched) {
+        this._isTouching = false;
+        this._velocity = 0;
+        this._velSamples.length = 0;
+        this._releaseNestedTouchOwner();
+        return;
+      }
 
-        // 判断是否为横向滑动：角度在 [0°, 阈值] 或 [180° - 阈值, 180°] 范围内
-        const isHorizontalScroll = angle < this._scrollAngleThreshold || angle > 180 - this._scrollAngleThreshold;
+      const canHandle = this._canHandleMainAxisDelta(delta);
+      // 仅在父子同轴时，子列表在边界且不可继续处理当前方向时才让给父列表
+      if (sameAxisWithParent && !canHandle) {
+        this._isTouching = false;
+        this._velocity = 0;
+        this._velSamples.length = 0;
+        this._releaseNestedTouchOwner();
+        return;
+      }
 
-        const isListVertical = this._isVertical();
-
-        // 方向一致时才考虑拦截
-        if ((isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll)) {
-          // 检查是否在边界
-          const pos = this._getContentMainPos();
-          const minBound = Math.min(this._boundsMin, this._boundsMax);
-          const maxBound = Math.max(this._boundsMin, this._boundsMax);
-          const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
-
-          // 判断滑动方向
-          const scrollingToStart = this._isVertical() ? delta > 0 : delta < 0;
-          const scrollingToEnd = this._isVertical() ? delta < 0 : delta > 0;
-
-          // 只有在非边界位置，或者在边界但向内滑动时才拦截
-          const atStartBound = this._isVertical() ? pos <= minBound : pos >= maxBound;
-          const atEndBound = this._isVertical() ? pos >= maxBound : pos <= minBound;
-
-          if ((!atStartBound && !atEndBound) || (atStartBound && scrollingToEnd) || (atEndBound && scrollingToStart)) {
-            this._shouldBlockParent = true;
-          }
-        }
+      this._shouldBlockParent = hasParent && this.blockParentScroll;
+      if (this._shouldBlockParent) {
+        this._parentScrollView?._cancelTouchTrackingFromChild();
       }
     }
 
     this._stopTouchEvent(e);
-    // const uiDelta = e.getUIDelta(this._tmpMoveVec2);
     const delta = this._isVertical() ? uiDelta.y : uiDelta.x;
     let pos = this._getContentMainPos();
     const minBound = Math.min(this._boundsMin, this._boundsMax);
     const maxBound = Math.max(this._boundsMin, this._boundsMax);
 
-    // 计算是否需要下拉刷新或上拉加载
     let finalDelta = delta;
-    let isPullingRefresh = false;
-    let isPullingLoadMore = false;
-
-    // console.log(`delta: ${delta}, pos: ${pos}, minBound: ${minBound}, maxBound: ${maxBound}`);
 
     if (this.enablePullRefresh && !this._isRefreshing) {
-      // 纵向：顶部下拉（pos < minBound 且向下拉）
-      // 横向：左侧右拉（pos > maxBound 且向右拉）
       const atTopBound = this._isVertical() ? pos <= minBound : pos >= maxBound;
       const pullingDown = this._isVertical() ? delta < 0 : delta > 0;
 
       if (atTopBound && pullingDown) {
-        isPullingRefresh = true;
         const overOffset = this._isVertical() ? minBound - pos : pos - maxBound;
         const resistance = 1 - Math.min(overOffset / this.pullRefreshMaxOffset, 1) * (1 - this.pullDampingRate);
         finalDelta = delta * resistance;
         this._pullOffset = Math.min(overOffset + Math.abs(finalDelta), this.pullRefreshMaxOffset);
-        // console.log(`[VScrollView] 下拉偏移: ${this._pullOffset}`);
 
-        // 更新刷新状态
         if (this._pullOffset >= this.pullRefreshThreshold) {
           this._updateRefreshState(RefreshState.READY, this._pullOffset);
         } else {
@@ -1397,20 +1486,15 @@ export class VirtualScrollView extends Component {
     }
 
     if (this.enableLoadMore && !this._isLoadingMore && this._hasMore) {
-      // 纵向：底部上拉（pos > maxBound 且向上拉）
-      // 横向：右侧左拉（pos < minBound 且向左拉）
       const atBottomBound = this._isVertical() ? pos >= maxBound : pos <= minBound;
       const pullingUp = this._isVertical() ? delta > 0 : delta < 0;
 
       if (atBottomBound && pullingUp) {
-        isPullingLoadMore = true;
         const overOffset = this._isVertical() ? pos - maxBound : minBound - pos;
         const resistance = 1 - Math.min(overOffset / this.loadMoreMaxOffset, 1) * (1 - this.pullDampingRate);
         finalDelta = delta * resistance;
         this._loadOffset = Math.min(overOffset + Math.abs(finalDelta), this.loadMoreMaxOffset);
 
-        // console.log(`[VScrollView] 上拉偏移: ${this._loadOffset}`);
-        // 更新加载状态
         if (this._loadOffset >= this.loadMoreThreshold) {
           this._updateLoadMoreState(LoadMoreState.READY, this._loadOffset);
         } else {
@@ -1419,10 +1503,8 @@ export class VirtualScrollView extends Component {
       }
     }
 
-    // 如果禁用越界滚动，限制位置在边界内
     if (this.disableBounce) {
       const newPos = pos + finalDelta;
-      // 不允许越界，直接限制在边界范围内
       if (newPos < minBound) {
         finalDelta = minBound - pos;
       } else if (newPos > maxBound) {
@@ -1430,12 +1512,10 @@ export class VirtualScrollView extends Component {
       }
     }
 
-    // 应用位置变化
     pos += finalDelta;
     if (this.pixelAlign) pos = Math.round(pos);
     this._setContentMainPos(pos);
 
-    // 记录速度采样
     const t = performance.now() / 1000;
     this._velSamples.push({ t, delta: finalDelta });
     const t0 = t - this.velocityWindow;
@@ -1451,6 +1531,7 @@ export class VirtualScrollView extends Component {
     this._stopTouchEvent(e);
     if (!this._isTouching) return;
     this._isTouching = false;
+    this._releaseNestedTouchOwner();
 
     // 检查是否触发刷新
     if (this._refreshState === RefreshState.READY && !this._isRefreshing) {
