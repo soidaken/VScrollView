@@ -436,6 +436,22 @@ export class VirtualScrollView extends Component {
   public blockParentScroll: boolean = true;
 
   @property({
+    displayName: '限制起手角度',
+    tooltip: '开启后，仅当首次滑动角度与列表方向匹配时才开始滚动',
+  })
+  public limitStartDragAngle: boolean = false;
+
+  @property({
+    displayName: '===起手角度阈值',
+    tooltip: '仅在开启「限制起手角度」时生效。默认 30°',
+    range: [0, 89, 1],
+    visible(this: VirtualScrollView) {
+      return this.limitStartDragAngle;
+    },
+  })
+  public startDragAngleThreshold: number = 30;
+
+  @property({
     displayName: '惯性阻尼系数',
     tooltip: '指数衰减系数，越大减速越快',
     range: [0, 10, 0.5],
@@ -490,6 +506,7 @@ export class VirtualScrollView extends Component {
   private _boundsMax = 0;
   private _velocity = 0;
   private _isTouching = false;
+  private _activeTouchId: number = -1;
   private _velSamples: { t: number; delta: number }[] = [];
   private _slotNodes: Node[] = [];
   private _slots = 0;
@@ -523,7 +540,6 @@ export class VirtualScrollView extends Component {
   private _shouldBlockParent: boolean = false;
   private _parentScrollView: VirtualScrollView | null = null;
   private _scrollDirectionThreshold: number = 15; // 滑动阈值（像素）
-  private _scrollAngleThreshold: number = 30; // 角度阈值（度）
 
   // 等大小模式下，从 content 子节点获取的模板节点
   private _templateNode: Node | null = null;
@@ -570,11 +586,29 @@ export class VirtualScrollView extends Component {
 
   private _cancelTouchTrackingFromChild() {
     this._isTouching = false;
+    this._activeTouchId = -1;
     this._velocity = 0;
     this._velSamples.length = 0;
     this._hasDeterminedScrollDirection = false;
     this._shouldBlockParent = false;
     this._releaseNestedTouchOwner();
+  }
+
+  private _extractTouchId(e?: EventTouch): number {
+    if (!e) return -1;
+    const evt = e as any;
+    if (typeof evt.getID === 'function') return evt.getID();
+    if (evt.touch && typeof evt.touch.getID === 'function') return evt.touch.getID();
+    if (typeof evt.touchId === 'number') return evt.touchId;
+    return -1;
+  }
+
+  private _isTrackingTouchEvent(e?: EventTouch): boolean {
+    if (!this._isTouching) return false;
+    if (!e) return true;
+    const eventTouchId = this._extractTouchId(e);
+    if (this._activeTouchId < 0 || eventTouchId < 0) return true;
+    return this._activeTouchId === eventTouchId;
   }
 
   private _acquireNestedTouchOwner() {
@@ -796,7 +830,7 @@ export class VirtualScrollView extends Component {
   }
 
   private _onGlobalTouchEnd(event: EventTouch) {
-    if (this._isTouching) {
+    if (this._isTrackingTouchEvent(event)) {
       this._onUp(event);
     }
   }
@@ -1238,6 +1272,7 @@ export class VirtualScrollView extends Component {
     }
     this._velocity = 0;
     this._isTouching = false;
+    this._activeTouchId = -1;
     this._velSamples.length = 0;
     if (!animate) {
       this._setContentMainPos(this.pixelAlign ? Math.round(targetPos) : targetPos);
@@ -1326,6 +1361,7 @@ export class VirtualScrollView extends Component {
     }
     this._velocity = 0;
     this._isTouching = false;
+    this._activeTouchId = -1;
     this._velSamples.length = 0;
     this._setContentMainPos(this.pixelAlign ? Math.round(targetPos) : targetPos);
     this._updateVisible(true);
@@ -1390,6 +1426,16 @@ export class VirtualScrollView extends Component {
   }
 
   private _onDown(e: EventTouch) {
+    if (this._isTouching) {
+      // 防止上一笔触摸异常未结束时，影响新一笔手势
+      this._isTouching = false;
+      this._activeTouchId = -1;
+      this._velocity = 0;
+      this._velSamples.length = 0;
+      this._hasDeterminedScrollDirection = false;
+      this._shouldBlockParent = false;
+    }
+
     const uiPos = e.getUILocation(this._touchStartPos);
     this._touchStartPos.set(uiPos);
     this._hasDeterminedScrollDirection = false;
@@ -1403,6 +1449,7 @@ export class VirtualScrollView extends Component {
 
     this._stopTouchEvent(e);
     this._isTouching = true;
+    this._activeTouchId = this._extractTouchId(e);
     this._velocity = 0;
     this._velSamples.length = 0;
     if (this._scrollTween) {
@@ -1426,17 +1473,22 @@ export class VirtualScrollView extends Component {
       if (totalDelta <= this._scrollDirectionThreshold) return;
 
       this._hasDeterminedScrollDirection = true;
-      const angle = Math.abs((Math.atan2(deltaY, deltaX) * 180) / Math.PI);
-      const isVerticalScroll = angle > 90 - this._scrollAngleThreshold && angle < 90 + this._scrollAngleThreshold;
-      const isHorizontalScroll = angle < this._scrollAngleThreshold || angle > 180 - this._scrollAngleThreshold;
       const isListVertical = this._isVertical();
-      const axisMatched = (isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll);
+      let axisMatched = true;
+      if (this.limitStartDragAngle) {
+        const angleThreshold = math.clamp(this.startDragAngleThreshold, 0, 89);
+        const angle = Math.abs((Math.atan2(deltaY, deltaX) * 180) / Math.PI);
+        const isVerticalScroll = angle > 90 - angleThreshold && angle < 90 + angleThreshold;
+        const isHorizontalScroll = angle < angleThreshold || angle > 180 - angleThreshold;
+        axisMatched = (isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll);
+      }
       const delta = isListVertical ? uiDelta.y : uiDelta.x;
       const sameAxisWithParent =
         hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
 
       if (!axisMatched) {
         this._isTouching = false;
+        this._activeTouchId = -1;
         this._velocity = 0;
         this._velSamples.length = 0;
         this._releaseNestedTouchOwner();
@@ -1447,6 +1499,7 @@ export class VirtualScrollView extends Component {
       // 仅在父子同轴时，子列表在边界且不可继续处理当前方向时才让给父列表
       if (sameAxisWithParent && !canHandle) {
         this._isTouching = false;
+        this._activeTouchId = -1;
         this._velocity = 0;
         this._velSamples.length = 0;
         this._releaseNestedTouchOwner();
@@ -1531,6 +1584,7 @@ export class VirtualScrollView extends Component {
     this._stopTouchEvent(e);
     if (!this._isTouching) return;
     this._isTouching = false;
+    this._activeTouchId = -1;
     this._releaseNestedTouchOwner();
 
     // 检查是否触发刷新
