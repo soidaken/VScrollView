@@ -910,7 +910,7 @@
     },
     "content": null,
     "useVirtualList": true,
-    "direction": 0,
+    "direction": 1,
     "itemCreationMode": 0,
     "itemNode": null,
     "itemPrefab": null,
