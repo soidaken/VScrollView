@@ -422,7 +422,7 @@ export class VirtualScrollView extends Component {
 
   @property({
     displayName: '禁用越界滚动',
-    tooltip: '是否禁用越界滚动（开启后将无法滚动到边界之外）'
+    tooltip: '是否禁用越界滚动（开启后将无法滚动到边界之外）',
   })
   public disableBounce: boolean = false;
 
@@ -543,6 +543,8 @@ export class VirtualScrollView extends Component {
 
   // 等大小模式下，从 content 子节点获取的模板节点
   private _templateNode: Node | null = null;
+  private _isStarted: boolean = false;
+  private _pendingStartOperations: Array<() => void> = [];
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -674,6 +676,14 @@ export class VirtualScrollView extends Component {
     return this._isVertical() ? this.content!.position.y : this.content!.position.x;
   }
 
+  private _getEndBound(): number {
+    return this._isVertical() ? this._boundsMax : this._boundsMin;
+  }
+
+  private _isNearEndBound(pos: number, epsilon: number = 2): boolean {
+    return Math.abs(pos - this._getEndBound()) <= epsilon;
+  }
+
   private _setContentMainPos(pos: number) {
     if (!Number.isFinite(pos)) return;
     if (this.pixelAlign) pos = Math.round(pos);
@@ -706,6 +716,8 @@ export class VirtualScrollView extends Component {
       }
       this._bindTouch();
       this._bindGlobalTouch();
+      this._isStarted = true;
+      this._flushPendingStartOperations();
       return;
     }
 
@@ -734,9 +746,13 @@ export class VirtualScrollView extends Component {
     else await this._initFixedSizeMode();
     this._bindTouch();
     this._bindGlobalTouch();
+    this._isStarted = true;
+    this._flushPendingStartOperations();
   }
 
   onDestroy() {
+    this._pendingStartOperations.length = 0;
+    this._isStarted = false;
     this._releaseNestedTouchOwner();
     input.off(Input.EventType.TOUCH_END, this._onGlobalTouchEnd, this);
     input.off(Input.EventType.TOUCH_CANCEL, this._onGlobalTouchEnd, this);
@@ -779,14 +795,28 @@ export class VirtualScrollView extends Component {
     }
   }
 
+  private _runOrQueueAfterStart(operation: () => void): boolean {
+    if (this._isStarted) return false;
+    this._pendingStartOperations.push(operation);
+    return true;
+  }
+
+  private _flushPendingStartOperations() {
+    if (this._pendingStartOperations.length === 0) return;
+    const operations = this._pendingStartOperations.slice();
+    this._pendingStartOperations.length = 0;
+    for (const operation of operations) {
+      operation();
+    }
+  }
+
   private _onMouseWheel(e: EventMouse) {
     if (!this.enableMouseWheel) return;
     const scrollY = e.getScrollY();
     if (scrollY === 0) return;
     const hasParent = !!this._ensureParentScrollView();
     const wheelMainDelta = this._isVertical() ? -scrollY : scrollY;
-    const sameAxisWithParent =
-      hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
+    const sameAxisWithParent = hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
     if (hasParent && this.blockParentScroll && (!sameAxisWithParent || this._canHandleMainAxisDelta(wheelMainDelta))) {
       e.propagationStopped = true;
       this._parentScrollView?._cancelTouchTrackingFromChild();
@@ -987,6 +1017,10 @@ export class VirtualScrollView extends Component {
   }
 
   private _buildPrefixSum() {
+    const hasContent = !!this.content;
+    const oldPos = hasContent ? this._getContentMainPos() : 0;
+    const wasAtEnd = hasContent ? this._isNearEndBound(oldPos) : false;
+
     const n = this._itemSizes.length;
     this._prefixPositions = new Array(n);
     // 从 headerSpacing 开始
@@ -1007,6 +1041,10 @@ export class VirtualScrollView extends Component {
     } else {
       this._boundsMin = -Math.max(0, this._contentSize - this._viewportSize);
       this._boundsMax = 0;
+    }
+
+    if (wasAtEnd) {
+      this._setContentMainPos(this._getEndBound());
     }
   }
 
@@ -1139,6 +1177,10 @@ export class VirtualScrollView extends Component {
   }
 
   private _rebuildPrefixSumFrom(startIndex: number) {
+    const hasContent = !!this.content;
+    const oldPos = hasContent ? this._getContentMainPos() : 0;
+    const wasAtEnd = hasContent ? this._isNearEndBound(oldPos) : false;
+
     if (startIndex === 0) {
       this._buildPrefixSum();
       return;
@@ -1159,6 +1201,10 @@ export class VirtualScrollView extends Component {
     } else {
       this._boundsMin = -Math.max(0, this._contentSize - this._viewportSize);
       this._boundsMax = 0;
+    }
+
+    if (wasAtEnd) {
+      this._setContentMainPos(this._getEndBound());
     }
   }
 
@@ -1304,16 +1350,19 @@ export class VirtualScrollView extends Component {
   }
 
   public scrollToTop(animate = false, duration?: number) {
+    if (this._runOrQueueAfterStart(() => this.scrollToTop(animate, duration))) return;
     const target = this._isVertical() ? this._boundsMin : this._boundsMax;
     this._scrollToPosition(target, animate, duration);
   }
 
   public scrollToBottom(animate = false, duration?: number) {
+    if (this._runOrQueueAfterStart(() => this.scrollToBottom(animate, duration))) return;
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
     this._scrollToPosition(target, animate, duration);
   }
 
   public scrollToIndex(index: number, animate = false, duration?: number) {
+    if (this._runOrQueueAfterStart(() => this.scrollToIndex(index, animate, duration))) return;
     index = math.clamp(index | 0, 0, Math.max(0, this.totalCount - 1));
     let targetPos = 0;
 
@@ -1368,16 +1417,19 @@ export class VirtualScrollView extends Component {
   }
 
   public flashToTop() {
+    if (this._runOrQueueAfterStart(() => this.flashToTop())) return;
     const target = this._isVertical() ? this._boundsMin : this._boundsMax;
     this._flashToPosition(target);
   }
 
   public flashToBottom() {
+    if (this._runOrQueueAfterStart(() => this.flashToBottom())) return;
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
     this._flashToPosition(target);
   }
 
   public flashToIndex(index: number) {
+    if (this._runOrQueueAfterStart(() => this.flashToIndex(index))) return;
     if (!this.useVirtualList) {
       console.warn('[VirtualScrollView] 简单滚动模式不支持 flashToIndex');
       return;
@@ -1483,8 +1535,7 @@ export class VirtualScrollView extends Component {
         axisMatched = (isListVertical && isVerticalScroll) || (!isListVertical && isHorizontalScroll);
       }
       const delta = isListVertical ? uiDelta.y : uiDelta.x;
-      const sameAxisWithParent =
-        hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
+      const sameAxisWithParent = hasParent && this._parentScrollView ? this._parentScrollView.direction === this.direction : false;
 
       if (!axisMatched) {
         this._isTouching = false;
@@ -1950,7 +2001,7 @@ export class VirtualScrollView extends Component {
     }
   }
 
-  private _playDefaultItemAppearAnimation(node: Node, index: number) { }
+  private _playDefaultItemAppearAnimation(node: Node, index: number) {}
 
   private _updateItemClickHandler(node: Node, index: number) {
     if (!this.useVirtualList) return;
