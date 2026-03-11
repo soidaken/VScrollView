@@ -1019,7 +1019,7 @@ export class VirtualScrollView extends Component {
   private _buildPrefixSum() {
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
-    const wasAtEnd = hasContent ? this._isNearEndBound(oldPos) : false;
+    const wasAtEnd = this._isStarted && hasContent ? this._isNearEndBound(oldPos) : false;
 
     const n = this._itemSizes.length;
     this._prefixPositions = new Array(n);
@@ -1179,7 +1179,7 @@ export class VirtualScrollView extends Component {
   private _rebuildPrefixSumFrom(startIndex: number) {
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
-    const wasAtEnd = hasContent ? this._isNearEndBound(oldPos) : false;
+    const wasAtEnd = this._isStarted && hasContent ? this._isNearEndBound(oldPos) : false;
 
     if (startIndex === 0) {
       this._buildPrefixSum();
