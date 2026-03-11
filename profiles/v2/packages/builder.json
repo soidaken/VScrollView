@@ -79,8 +79,8 @@
         "progress": 1,
         "state": "success",
         "stage": "build",
-        "message": "2025-12-14 23:24:41 build success in 8 s!",
-        "detailMessage": "Output asset in bundles success, progress: 13%\r",
+        "message": "2026-3-1 15:09:33 build success in 40 s!",
+        "detailMessage": "handle single json\r",
         "options": {
           "name": "VScrollView",
           "server": "",
@@ -193,7 +193,7 @@
           "__version__": "1.3.9",
           "logDest": "project://temp/builder/log/web-desktop2025-11-22 19-08.log"
         },
-        "time": "2025-12-14 23:24:33",
+        "time": "2026-3-1 15:08:52",
         "dirty": false
       }
     }

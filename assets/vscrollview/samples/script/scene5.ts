@@ -1,17 +1,4 @@
-import {
-  _decorator,
-  Component,
-  game,
-  instantiate,
-  Label,
-  Node,
-  RichText,
-  Sprite,
-  SpriteFrame,
-  tween,
-  UITransform,
-  Vec3,
-} from 'cc';
+import { _decorator, Component, game, instantiate, Label, Node, RichText, Sprite, SpriteFrame, tween, UITransform, Vec3 } from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
@@ -33,7 +20,7 @@ export class scene5 extends Component {
     game.frameRate = 120;
 
     // 模拟聊天数据
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 80; i++) {
       const message = this.generateRandomMessage(i === 1);
       this.chatData.push({
         player: i % 2 === 0 ? 1 : 2,
@@ -90,14 +77,16 @@ export class scene5 extends Component {
       };
 
       //子项新加入的出现动画
-      this.vlist.playItemAppearAnimationFn = (itemNode: Node, index: number) => {
-        itemNode.setScale(0, 0);
-        tween(itemNode)
-          .to(0.15, { scale: new Vec3(1, 1, 1) }, { easing: 'smooth' })
-          .start();
-      };
+      // this.vlist.playItemAppearAnimationFn = (itemNode: Node, index: number) => {
+      //   itemNode.setScale(0, 0);
+      //   tween(itemNode)
+      //     .to(0.15, { scale: new Vec3(1, 1, 1) }, { easing: 'smooth' })
+      //     .start();
+      // };
 
-      this.vlist.refreshList(this.chatData);
+      // 更新列表
+      this.vlist.refreshList(this.chatData.length);
+      this.vlist.scrollToBottom(false);
     }
 
     this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
@@ -134,7 +123,7 @@ export class scene5 extends Component {
       calculatedHeight: 0,
     });
 
-    this.vlist.flashToBottom();
+    // this.vlist.flashToBottom();
 
     // 更新列表
     this.vlist.refreshList(this.chatData.length);
@@ -168,18 +157,7 @@ export class scene5 extends Component {
       ];
       return richTextMessages[Math.floor(Math.random() * richTextMessages.length)];
     }
-    const shortMessages = [
-      '好的',
-      '收到',
-      '👌',
-      '没问题',
-      '知道了',
-      '哈哈哈',
-      '😂😂😂',
-      '在吗？',
-      '晚安',
-      '早上好',
-    ];
+    const shortMessages = ['好的', '收到', '👌', '没问题', '知道了', '哈哈哈', '😂😂😂', '在吗？', '晚安', '早上好'];
 
     const mediumMessages = [
       '今天天气不错，出去走走吧',
