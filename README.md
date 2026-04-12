@@ -67,6 +67,17 @@ onLoad() {
     console.log(`click item ${index + 1}: ${item.title}`);
   };
 
+  this.vlist.onItemEdgeEnterFn = (itemNode, index) => {
+    // 子项刚进入可视区时触发，适合做入场动效
+    Tween.stopAllByTarget(itemNode);
+    itemNode.setScale(0, 0, 1);
+    tween(itemNode).to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+  };
+
+  this.vlist.onItemFullEnterFn = (itemNode, index) => {
+    console.log(`item ${index + 1} fully visible`);
+  };
+
   this.vlist.refreshList(this.data);
 
   // 常用操作
@@ -75,3 +86,8 @@ onLoad() {
   // this.vlist.scrollToBottom(true);
 }
 ```
+
+可视区回调说明：
+
+- `onItemEdgeEnterFn`：子项刚进入可视区域边缘时触发，适合播放出现动画。
+- `onItemFullEnterFn`：子项完全进入可视区域后触发，适合做曝光统计或完整展示后的业务逻辑。
