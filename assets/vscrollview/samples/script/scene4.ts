@@ -1,4 +1,4 @@
-import { _decorator, Component, game, Label, Node, Sprite, SpriteFrame } from 'cc';
+import { _decorator, Component, game, Label, Node, Sprite, SpriteFrame, tween, UIOpacity } from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
@@ -39,6 +39,15 @@ export class scene4 extends Component {
       this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
         const tip = this.node.getChildByName('tip').getComponent(Label);
         tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
+      };
+
+      this.vlist.onItemEdgeEnterFn = (itemNode: Node) => {
+        let uiOpacity = itemNode.getComponent(UIOpacity);
+        if (!uiOpacity) {
+          uiOpacity = itemNode.addComponent(UIOpacity);
+        }
+        uiOpacity.opacity = 0;
+        tween(uiOpacity).to(0.2, { opacity: 255 }).start();
       };
 
       this.vlist.refreshList(this.data);

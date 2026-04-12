@@ -1,4 +1,4 @@
-import { _decorator, Component, game, instantiate, Label, Node } from 'cc';
+import { _decorator, Component, game, Label, Node, Tween, tween, Vec3 } from 'cc';
 import { VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
@@ -54,6 +54,12 @@ export class scene2 extends Component {
       this.vlist.onItemClickFn = (itemNode: Node, index: number) => {
         const tip = this.node.getChildByName('tip').getComponent(Label);
         tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
+      };
+
+      this.vlist.onItemEdgeEnterFn = (itemNode: Node) => {
+        Tween.stopAllByTarget(itemNode);
+        itemNode.setScale(0, 0, 1);
+        tween(itemNode).to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
       };
 
       this.vlist.refreshList(this.data);

@@ -97,18 +97,29 @@ class InternalNodePool {
   }
 }
 
+// 渲染指定索引的子项内容
 export type RenderItemFn = (node: Node, index: number) => void;
+// 按索引提供一个子项节点
 export type ProvideNodeFn = (index: number) => Node | Promise<Node>;
+// 子项点击回调
 export type OnItemClickFn = (node: Node, index: number) => void;
+// 子项长按回调
 export type OnItemLongPressFn = (node: Node, index: number) => void;
+// 新增项首次布局时的入场动画回调
 export type PlayItemAppearAnimationFn = (node: Node, index: number) => void;
+// 子项边缘进入可视区时回调
+export type OnItemEdgeEnterFn = (node: Node, index: number) => void;
+// 子项完全进入可视区时回调
+export type OnItemFullEnterFn = (node: Node, index: number) => void;
+// 返回指定索引子项的主轴尺寸
 export type GetItemHeightFn = (index: number) => number;
+// 返回指定索引子项的模板类型索引
 export type GetItemTypeIndexFn = (index: number) => number;
-// 刷新状态回调
+// 刷新状态变化回调
 export type OnRefreshStateChangeFn = (state: RefreshState, offset: number) => void;
-// 加载更多状态回调
+// 加载更多状态变化回调
 export type OnLoadMoreStateChangeFn = (state: LoadMoreState, offset: number) => void;
-// 分页吸附回调
+// 分页切换回调
 export type OnPageChangeFn = (pageIndex: number) => void;
 
 export enum ScrollDirection {
@@ -489,15 +500,29 @@ export class VirtualScrollView extends Component {
   })
   public mouseWheelSpeed: number = 3.0;
 
+  // 渲染子项内容
   public renderItemFn: RenderItemFn | null = null;
+  // 动态提供子项节点
   public provideNodeFn: ProvideNodeFn | null = null;
+  // 子项点击事件
   public onItemClickFn: OnItemClickFn | null = null;
+  // 子项长按事件
   public onItemLongPressFn: OnItemLongPressFn | null = null;
+  // 新增项首次布局动画
   public playItemAppearAnimationFn: PlayItemAppearAnimationFn | null = null;
+  // 子项边缘进入可视区事件
+  public onItemEdgeEnterFn: OnItemEdgeEnterFn | null = null;
+  // 子项完全进入可视区事件
+  public onItemFullEnterFn: OnItemFullEnterFn | null = null;
+  // 动态尺寸查询
   public getItemHeightFn: GetItemHeightFn | null = null;
+  // 动态模板类型查询
   public getItemTypeIndexFn: GetItemTypeIndexFn | null = null;
+  // 刷新状态变化事件
   public onRefreshStateChangeFn: OnRefreshStateChangeFn | null = null;
+  // 加载更多状态变化事件
   public onLoadMoreStateChangeFn: OnLoadMoreStateChangeFn | null = null;
+  // 分页切换事件
   public onPageChangeFn: OnPageChangeFn | null = null;
 
   private _viewportSize = 0;
@@ -545,6 +570,8 @@ export class VirtualScrollView extends Component {
   private _templateNode: Node | null = null;
   private _isStarted: boolean = false;
   private _pendingStartOperations: Array<() => void> = [];
+  private _edgeVisibleIndices: Set<number> = new Set();
+  private _fullyVisibleIndices: Set<number> = new Set();
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -747,12 +774,15 @@ export class VirtualScrollView extends Component {
     this._bindTouch();
     this._bindGlobalTouch();
     this._isStarted = true;
+    this._updateVisible(true);
     this._flushPendingStartOperations();
   }
 
   onDestroy() {
     this._pendingStartOperations.length = 0;
     this._isStarted = false;
+    this._edgeVisibleIndices.clear();
+    this._fullyVisibleIndices.clear();
     this._releaseNestedTouchOwner();
     input.off(Input.EventType.TOUCH_END, this._onGlobalTouchEnd, this);
     input.off(Input.EventType.TOUCH_CANCEL, this._onGlobalTouchEnd, this);
@@ -1082,6 +1112,58 @@ export class VirtualScrollView extends Component {
     }
 
     return { start: Math.max(0, start - this.buffer), end: Math.min(n, end + this.buffer) };
+  }
+
+  private _getItemMainStart(index: number): number {
+    if (this.useDynamicSize) {
+      return this._prefixPositions[index] || 0;
+    }
+    const line = Math.floor(index / this.gridCount);
+    return this.headerSpacing + line * (this.itemMainSize + this.spacing);
+  }
+
+  private _getItemMainSize(index: number): number {
+    if (this.useDynamicSize) {
+      return this._itemSizes[index] || 0;
+    }
+    return this.itemMainSize;
+  }
+
+  private _dispatchItemEnterCallbacks() {
+    if (!this.useVirtualList) return;
+    if (!this.onItemEdgeEnterFn && !this.onItemFullEnterFn) return;
+
+    const viewportStart = this._isVertical() ? this._getContentMainPos() : -this._getContentMainPos();
+    const viewportEnd = viewportStart + this._viewportSize;
+    const nextEdgeVisibleIndices: Set<number> = new Set();
+    const nextFullyVisibleIndices: Set<number> = new Set();
+
+    for (let slot = 0; slot < this._slots; slot++) {
+      const index = this._slotFirstIndex + slot;
+      const node = this._slotNodes[slot];
+      if (!node || !node.active || index < 0 || index >= this.totalCount) continue;
+
+      const itemStart = this._getItemMainStart(index);
+      const itemEnd = itemStart + this._getItemMainSize(index);
+      const isEdgeVisible = itemStart < viewportEnd && itemEnd > viewportStart;
+      if (!isEdgeVisible) continue;
+
+      nextEdgeVisibleIndices.add(index);
+      if (!this._edgeVisibleIndices.has(index) && this.onItemEdgeEnterFn) {
+        this.onItemEdgeEnterFn(node, index);
+      }
+
+      const isFullyVisible = itemStart >= viewportStart && itemEnd <= viewportEnd;
+      if (!isFullyVisible) continue;
+
+      nextFullyVisibleIndices.add(index);
+      if (!this._fullyVisibleIndices.has(index) && this.onItemFullEnterFn) {
+        this.onItemFullEnterFn(node, index);
+      }
+    }
+
+    this._edgeVisibleIndices = nextEdgeVisibleIndices;
+    this._fullyVisibleIndices = nextFullyVisibleIndices;
   }
 
   update(dt: number) {
@@ -1801,13 +1883,18 @@ export class VirtualScrollView extends Component {
     if (force) {
       this._slotFirstIndex = newFirst;
       this._layoutSlots(this._slotFirstIndex, true);
+      this._dispatchItemEnterCallbacks();
       return;
     }
     const diff = newFirst - this._slotFirstIndex;
-    if (diff === 0) return;
+    if (diff === 0) {
+      this._dispatchItemEnterCallbacks();
+      return;
+    }
     if (Math.abs(diff) >= this._slots) {
       this._slotFirstIndex = newFirst;
       this._layoutSlots(this._slotFirstIndex, true);
+      this._dispatchItemEnterCallbacks();
       return;
     }
     const absDiff = Math.abs(diff);
@@ -1847,6 +1934,7 @@ export class VirtualScrollView extends Component {
         }
       }
     }
+    this._dispatchItemEnterCallbacks();
   }
 
   private async _layoutSingleSlot(node: Node | null, idx: number, slot: number) {
