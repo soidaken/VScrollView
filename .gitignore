@@ -11,6 +11,9 @@ log/
 # === Node.js 依赖 ===
 node_modules/
 
+# === Cocos Creator 类型定义 ===
+@cocos/
+
 # === 编辑器相关 ===
 .vscode/
 .DS_Store

@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.SceneAsset",
-    "_name": "场景13-分页PageView模式",
+    "_name": "场景13-分页PageView模式-001",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -56,7 +56,7 @@
     "_globals": {
       "__id__": 77
     },
-    "_id": "4dd4f758-cbb6-4ace-8ee4-4f937cee8bcb"
+    "_id": "0f875681-64aa-457d-83eb-78e9223377c0"
   },
   {
     "__type__": "cc.Node",

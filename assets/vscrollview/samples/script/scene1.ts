@@ -1,5 +1,5 @@
-import { _decorator, Component, game, Label, Node, Tween, tween, Vec3 } from 'cc';
-import { VirtualScrollView } from '../../VScrollView';
+import { _decorator, Component, easing, game, Label, Node, tween, v3 } from 'cc';
+import { ItemAppearContext, VirtualScrollView } from '../../VScrollView';
 import UIButton from './UIButton';
 const { ccclass, property } = _decorator;
 
@@ -10,18 +10,8 @@ export class scene1 extends Component {
 
   //列表数据
   private data: any[] = [];
-  private itemScaleMap: WeakMap<Node, Vec3> = new WeakMap();
 
   private renderOptOnOff = false;
-
-  private _getOrCacheItemScale(itemNode: Node): Vec3 {
-    let scale = this.itemScaleMap.get(itemNode);
-    if (!scale) {
-      scale = new Vec3(itemNode.scale.x, itemNode.scale.y, itemNode.scale.z);
-      this.itemScaleMap.set(itemNode, scale);
-    }
-    return scale;
-  }
 
   onLoad() {
     game.frameRate = 120;
@@ -63,14 +53,18 @@ export class scene1 extends Component {
         tip.string = `你长按了第${index + 1}项,内容:${this.data[index].data1}`;
       };
 
-      this.vlist.onItemEdgeEnterFn = (itemNode: Node) => {
-        const targetScale = this._getOrCacheItemScale(itemNode);
-        Tween.stopAllByTarget(itemNode);
-        itemNode.setScale(0, 0, targetScale.z);
-        tween(itemNode).to(0.2, { scale: new Vec3(targetScale.x, targetScale.y, targetScale.z) }, { easing: 'backOut' }).start();
+      this.vlist.onItemEdgeEnterFn = (itemNode: Node, index: number) => {
+        tween(itemNode)
+          .set({ scale: v3(0, 0, 1) })
+          .to(
+            0.2,
+            { scale: v3(1, 1, 1) },
+            {
+              easing: easing.backOut,
+            }
+          )
+          .start();
       };
-
-      this.vlist.onItemFullEnterFn = null;
 
       this.vlist.refreshList(this.data);
 
@@ -87,7 +81,7 @@ export class scene1 extends Component {
     });
 
     UIButton.onClicked(this.node.getChildByName('btn3'), (button: UIButton) => {
-      this.vlist.scrollToIndex(10 - 1, true);
+      this.vlist.scrollToIndex(10 - 1, true, undefined, undefined, true);
     });
 
     UIButton.onClicked(this.node.getChildByName('btn4'), (button: UIButton) => {
