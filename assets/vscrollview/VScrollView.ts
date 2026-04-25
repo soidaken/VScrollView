@@ -144,6 +144,15 @@ export enum ItemCreationMode {
 	PREFAB = 1,
 }
 
+// 滚动风格
+export enum ScrollStyle {
+	APPLE = 0,
+	ANDROID = 1,
+	LIGHT = 2,
+	HEAVY = 3,
+	CUSTOM = 4,
+}
+
 // 添加刷新状态枚举
 export enum RefreshState {
 	IDLE = 0, // 空闲状态
@@ -466,28 +475,56 @@ export class VirtualScrollView extends Component {
 	public startDragAngleThreshold: number = 30;
 
 	@property({
+		type: Enum(ScrollStyle),
+		displayName: "滚动风格",
+		tooltip: "APPLE / ANDROID / LIGHT / HEAVY / CUSTOM（自定义）",
+	})
+	public scrollStyle: ScrollStyle = ScrollStyle.APPLE;
+
+	@property({
 		displayName: "惯性阻尼系数",
 		tooltip: "指数衰减系数，越大减速越快",
 		range: [0, 10, 0.5],
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
 	})
 	public inertiaDampK: number = 1;
 
-	@property({ displayName: "弹簧刚度", tooltip: "越界弹簧刚度 K（建议 120–240）" })
+	@property({
+		displayName: "弹簧刚度",
+		tooltip: "越界弹簧刚度 K（建议 120–240）",
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
+	})
 	public springK: number = 150.0;
 
-	@property({ displayName: "弹簧阻尼", tooltip: "越界阻尼 C（建议 22–32）" })
+	@property({
+		displayName: "弹簧阻尼",
+		tooltip: "越界阻尼 C（建议 22–32）",
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
+	})
 	public springC: number = 26.0;
 
-	@property({ displayName: "速度阈值", tooltip: "速度阈值（像素/秒），低于即停止" })
+	@property({
+		displayName: "速度阈值",
+		tooltip: "速度阈值（像素/秒），低于即停止",
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
+	})
 	public velocitySnap: number = 5;
 
 	@property({ displayName: "速度窗口", tooltip: "速度估计窗口（秒）" })
 	public velocityWindow: number = 0.08;
 
-	@property({ displayName: "最大惯性速度", tooltip: "最大惯性速度（像素/秒）" })
+	@property({
+		displayName: "最大惯性速度",
+		tooltip: "最大惯性速度（像素/秒）",
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
+	})
 	public maxVelocity: number = 6000;
 
-	@property({ displayName: "iOS减速曲线", tooltip: "是否使用 iOS 风格的减速曲线" })
+	@property({
+		displayName: "iOS减速曲线",
+		tooltip: "是否使用 iOS 风格的减速曲线",
+		visible(this: VirtualScrollView) { return this.scrollStyle === ScrollStyle.CUSTOM; },
+	})
 	public useIOSDecelerationCurve: boolean = true;
 
 	@property({ displayName: "启用滚轮", tooltip: "是否启用鼠标滚轮滚动" })
@@ -782,6 +819,7 @@ export class VirtualScrollView extends Component {
 
 		this.content.removeAllChildren();
 		this._viewportSize = this._getViewportMainSize();
+		this._applyScrollStyle();
 		if (this.useDynamicSize) await this._initDynamicSizeMode();
 		else await this._initFixedSizeMode();
 		this._bindTouch();
@@ -1450,6 +1488,49 @@ export class VirtualScrollView extends Component {
 				this._slotPrefabIndices.push(-1);
 			}
 			console.log(`[VScrollView] 槽位扩展: ${oldSlots} -> ${this._slots} (总数据: ${this.totalCount})`);
+		}
+	}
+
+	public setScrollStyle(style: ScrollStyle) {
+		this.scrollStyle = style;
+		this._applyScrollStyle();
+	}
+
+	private _applyScrollStyle() {
+		switch (this.scrollStyle) {
+			case ScrollStyle.APPLE:
+				this.inertiaDampK = 0.6;
+				this.useIOSDecelerationCurve = true;
+				this.springK = 100;
+				this.springC = 18;
+				this.maxVelocity = 10000;
+				this.velocitySnap = 2;
+				break;
+			case ScrollStyle.ANDROID:
+				this.inertiaDampK = 2.0;
+				this.useIOSDecelerationCurve = false;
+				this.springK = 250;
+				this.springC = 40;
+				this.maxVelocity = 5000;
+				this.velocitySnap = 8;
+				break;
+			case ScrollStyle.LIGHT:
+				this.inertiaDampK = 0.8;
+				this.useIOSDecelerationCurve = true;
+				this.springK = 120;
+				this.springC = 22;
+				this.maxVelocity = 8000;
+				this.velocitySnap = 3;
+				break;
+			case ScrollStyle.HEAVY:
+				this.inertiaDampK = 2.5;
+				this.useIOSDecelerationCurve = false;
+				this.springK = 200;
+				this.springC = 35;
+				this.maxVelocity = 3000;
+				this.velocitySnap = 10;
+				break;
+			// CUSTOM 模式：不做覆盖，保留用户手动设置的值
 		}
 	}
 

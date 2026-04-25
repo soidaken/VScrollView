@@ -48,23 +48,23 @@ export class scene1 extends Component {
         tip.string = `你点击了第${index + 1}项,内容:${this.data[index].data1}`;
       };
 
-      this.vlist.onItemLongPressFn = (node: Node, index: number) => {
-        const tip = this.node.getChildByName('tip').getComponent(Label);
-        tip.string = `你长按了第${index + 1}项,内容:${this.data[index].data1}`;
-      };
+      // this.vlist.onItemLongPressFn = (node: Node, index: number) => {
+      //   const tip = this.node.getChildByName('tip').getComponent(Label);
+      //   tip.string = `你长按了第${index + 1}项,内容:${this.data[index].data1}`;
+      // };
 
-      this.vlist.onItemEdgeEnterFn = (itemNode: Node, index: number) => {
-        tween(itemNode)
-          .set({ scale: v3(0, 0, 1) })
-          .to(
-            0.2,
-            { scale: v3(1, 1, 1) },
-            {
-              easing: easing.backOut,
-            }
-          )
-          .start();
-      };
+      // this.vlist.onItemEdgeEnterFn = (itemNode: Node, index: number) => {
+      //   tween(itemNode)
+      //     .set({ scale: v3(0, 0, 1) })
+      //     .to(
+      //       0.2,
+      //       { scale: v3(1, 1, 1) },
+      //       {
+      //         easing: easing.backOut,
+      //       }
+      //     )
+      //     .start();
+      // };
 
       this.vlist.refreshList(this.data);
 
