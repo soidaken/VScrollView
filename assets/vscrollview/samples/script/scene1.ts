@@ -66,7 +66,9 @@ export class scene1 extends Component {
       //     .start();
       // };
 
-      this.vlist.refreshList(this.data);
+      this.scheduleOnce(() => {
+        this.vlist.refreshList(this.data);
+      }, 1);
 
       // this.vlist.onOffSortLayer(this.renderOptOnOff);
     }

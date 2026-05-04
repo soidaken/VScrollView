@@ -856,7 +856,7 @@
     "itemNodes": [],
     "itemPrefabs": [],
     "triggerItemEnterCallbackOnce": true,
-    "gridCount": 1,
+    "gridCount": 6,
     "gridSpacing": 12,
     "spacing": 12,
     "headerSpacing": 0,

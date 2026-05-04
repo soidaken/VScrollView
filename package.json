@@ -4,6 +4,9 @@
   "creator": {
     "version": "3.8.7"
   },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  },
   "dependencies": {
     "code": "^5.2.4",
     "reasonix": "^0.7.2"
