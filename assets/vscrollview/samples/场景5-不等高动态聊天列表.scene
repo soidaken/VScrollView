@@ -604,9 +604,6 @@
     "pageSnapDuration": 0.15,
     "pageSnapDistanceRatio": 0.15,
     "pageSnapTriggerVelocity": 600,
-    "useDynamicHeight": true,
-    "columns": 1,
-    "columnSpacing": 0,
     "itemNodes": [],
     "itemPrefabs": [
       {
@@ -618,6 +615,7 @@
         "__expectedType__": "cc.Prefab"
       }
     ],
+    "triggerItemEnterCallbackOnce": true,
     "gridCount": 1,
     "gridSpacing": 8,
     "spacing": 16,
@@ -637,6 +635,7 @@
     "blockParentScroll": true,
     "limitStartDragAngle": false,
     "startDragAngleThreshold": 30,
+    "scrollStyle": 1,
     "inertiaDampK": 1,
     "springK": 160,
     "springC": 26,

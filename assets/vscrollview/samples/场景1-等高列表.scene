@@ -1381,7 +1381,7 @@
     "velocityWindow": 0.08,
     "maxVelocity": 6000,
     "useIOSDecelerationCurve": true,
-    "enableMouseWheel": true,
+    "enableMouseWheel": false,
     "mouseWheelSpeed": 3,
     "_id": "d9Tdd7o0tLi4L7DdLX8uBd"
   },

@@ -69,20 +69,7 @@ export class scene5 extends Component {
         //这个必须外部自己提供,因为组件的高度你可能有自己留白的需求,比如下面的上下各留20px空白
         const uit = itemNode.getComponent(UITransform);
         uit.height = uitBg.height;
-        // console.log(
-        //   `[自动测量] 索引${index} 高度变化: ${this.chatData[index].calculatedHeight} -> ${uit.height}`
-        // );
-        // this.chatData[index].calculatedHeight = uit.height;
-        // this.vlist.updateItemHeight(index, uit.height);
       };
-
-      //子项新加入的出现动画
-      // this.vlist.playItemAppearAnimationFn = (itemNode: Node, index: number) => {
-      //   itemNode.setScale(0, 0);
-      //   tween(itemNode)
-      //     .to(0.15, { scale: new Vec3(1, 1, 1) }, { easing: 'smooth' })
-      //     .start();
-      // };
 
       // 更新列表
       this.vlist.refreshList(this.chatData.length);
