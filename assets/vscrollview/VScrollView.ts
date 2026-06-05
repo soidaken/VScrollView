@@ -1360,6 +1360,29 @@ export class VirtualScrollView extends Component {
     this._updateVisible(true);
   }
 
+  private _updateMeasuredItemSize(index: number, newSize: number) {
+    const oldSize = this._itemSizes[index];
+    if (oldSize === newSize) return;
+
+    const oldPos = this.content ? this._getContentMainPos() : 0;
+    const viewportStart = this._isVertical() ? oldPos : -oldPos;
+    const itemStart = this._prefixPositions[index] || 0;
+    const itemEnd = itemStart + oldSize;
+    const delta = newSize - oldSize;
+    const shouldKeepViewportAnchor = itemEnd <= viewportStart + 0.5;
+
+    this._itemSizes[index] = newSize;
+    this._skipSnapToEndOnce = true;
+    this._rebuildPrefixSumFrom(index);
+
+    if (shouldKeepViewportAnchor) {
+      const anchorOffset = this._isVertical() ? delta : -delta;
+      this._setContentMainPos(oldPos + anchorOffset);
+    }
+
+    this._updateVisible(true);
+  }
+
   private _rebuildPrefixSumFrom(startIndex: number) {
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
@@ -2148,7 +2171,7 @@ export class VirtualScrollView extends Component {
         const uit = newNode.getComponent(UITransform);
         const actualSize = this._isVertical() ? uit?.height || 100 : uit?.width || 100;
         if (Math.abs(this._itemSizes[idx] - actualSize) > 1) {
-          this.updateItemHeight(idx, actualSize);
+          this._updateMeasuredItemSize(idx, actualSize);
           return;
         }
       }

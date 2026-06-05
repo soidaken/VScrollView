@@ -635,7 +635,7 @@
     "blockParentScroll": true,
     "limitStartDragAngle": false,
     "startDragAngleThreshold": 30,
-    "scrollStyle": 1,
+    "scrollStyle": 0,
     "inertiaDampK": 1,
     "springK": 160,
     "springC": 26,
