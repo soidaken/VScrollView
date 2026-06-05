@@ -2133,7 +2133,9 @@ export class VirtualScrollView extends Component {
       const previousIndex = newNode.getComponent(VScrollViewItem)?.dataIndex ?? -1;
       const shouldInit = !newNode.active || previousIndex !== idx;
       const appearContext = this._createItemAppearContext(idx, previousIndex >= 0 && previousIndex !== idx);
-      newNode.active = false;
+      // 不等高渲染回调里经常会测量 Label/RichText 的真实尺寸。
+      // RichText 只有在 enabledInHierarchy 时才会立即排版，所以这里需要激活后再渲染。
+      newNode.active = true;
       this._updateItemClickHandler(newNode, idx);
       if (this.renderItemFn) this.renderItemFn(newNode, idx);
       if (this.getItemHeightFn) {
