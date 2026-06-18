@@ -1365,14 +1365,15 @@ export class VirtualScrollView extends Component {
     if (oldSize === newSize) return;
 
     const oldPos = this.content ? this._getContentMainPos() : 0;
+    const wasAtEnd = this._isStarted && !!this.content && this._hasScrollableRange() && this._isNearEndBound(oldPos);
     const viewportStart = this._isVertical() ? oldPos : -oldPos;
     const itemStart = this._prefixPositions[index] || 0;
     const itemEnd = itemStart + oldSize;
     const delta = newSize - oldSize;
-    const shouldKeepViewportAnchor = itemEnd <= viewportStart + 0.5;
+    const shouldKeepViewportAnchor = !wasAtEnd && itemEnd <= viewportStart + 0.5;
 
     this._itemSizes[index] = newSize;
-    this._skipSnapToEndOnce = true;
+    this._skipSnapToEndOnce = !wasAtEnd;
     this._rebuildPrefixSumFrom(index);
 
     if (shouldKeepViewportAnchor) {
@@ -1626,7 +1627,13 @@ export class VirtualScrollView extends Component {
   public scrollToBottom(animate = false, duration?: number, onComplete?: () => void) {
     if (this._runOrQueueAfterStart(() => this.scrollToBottom(animate, duration, onComplete))) return;
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
-    this._scrollToPosition(target, animate, duration, onComplete);
+    this._scrollToPosition(target, animate, duration, () => {
+      const endTarget = this._isVertical() ? this._boundsMax : this._boundsMin;
+      if (Math.abs(this._getContentMainPos() - endTarget) > 0.5) {
+        this._scrollToPosition(endTarget, false);
+      }
+      onComplete?.();
+    });
   }
 
   public scrollToIndex(index: number, animate = false, duration?: number, onComplete?: () => void, center = false) {
