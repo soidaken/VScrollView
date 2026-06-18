@@ -600,6 +600,9 @@ export class VirtualScrollView extends Component {
   private _initSortLayerFlag: boolean = true;
   private _scrollTween: any = null;
   private _tmpMoveVec2 = new Vec2();
+  private _layoutPassDepth: number = 0;
+  private _hasPendingVisibleUpdate: boolean = false;
+  private _pendingVisibleUpdateForce: boolean = false;
 
   // 私有状态变量
   private _refreshState: RefreshState = RefreshState.IDLE;
@@ -1357,7 +1360,7 @@ export class VirtualScrollView extends Component {
     if (this._itemSizes[index] === size) return;
     this._itemSizes[index] = size;
     this._rebuildPrefixSumFrom(index);
-    this._updateVisible(true);
+    this._requestVisibleUpdate(true);
   }
 
   private _updateMeasuredItemSize(index: number, newSize: number) {
@@ -1381,7 +1384,7 @@ export class VirtualScrollView extends Component {
       this._setContentMainPos(oldPos + anchorOffset);
     }
 
-    this._updateVisible(true);
+    this._requestVisibleUpdate(true);
   }
 
   private _rebuildPrefixSumFrom(startIndex: number) {
@@ -1436,7 +1439,7 @@ export class VirtualScrollView extends Component {
     }
     if (!hasChange) return;
     this._rebuildPrefixSumFrom(minIndex);
-    this._updateVisible(true);
+    this._requestVisibleUpdate(true);
   }
 
   public refreshList(data: any[] | number) {
@@ -2053,6 +2056,15 @@ export class VirtualScrollView extends Component {
     this._updateLoadMoreState(LoadMoreState.IDLE, 0);
   }
 
+  private _requestVisibleUpdate(force: boolean) {
+    if (this._layoutPassDepth > 0) {
+      this._hasPendingVisibleUpdate = true;
+      this._pendingVisibleUpdateForce = this._pendingVisibleUpdateForce || force;
+      return;
+    }
+    this._updateVisible(force);
+  }
+
   private _updateVisible(force: boolean) {
     if (!this.useVirtualList) return;
     let scrollPos = this._getContentMainPos();
@@ -2348,13 +2360,24 @@ export class VirtualScrollView extends Component {
 
   private _layoutSlots(firstIndex: number, forceRender: boolean) {
     if (!this.useVirtualList) return;
-    for (let s = 0; s < this._slots; s++) {
-      const idx = firstIndex + s;
-      const node = this._slotNodes[s];
-      if (idx >= this.totalCount) {
-        if (node) node.active = false;
-      } else {
-        this._layoutSingleSlot(node, idx, s);
+    this._layoutPassDepth++;
+    try {
+      for (let s = 0; s < this._slots; s++) {
+        const idx = firstIndex + s;
+        const node = this._slotNodes[s];
+        if (idx >= this.totalCount) {
+          if (node) node.active = false;
+        } else {
+          this._layoutSingleSlot(node, idx, s);
+        }
+      }
+    } finally {
+      this._layoutPassDepth--;
+      if (this._layoutPassDepth === 0 && this._hasPendingVisibleUpdate) {
+        const force = this._pendingVisibleUpdateForce;
+        this._hasPendingVisibleUpdate = false;
+        this._pendingVisibleUpdateForce = false;
+        this._updateVisible(force);
       }
     }
   }
