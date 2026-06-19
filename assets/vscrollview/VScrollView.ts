@@ -1224,6 +1224,11 @@ export class VirtualScrollView extends Component {
     return this.itemMainSize;
   }
 
+  private _markItemNeedsEnterCallback(index: number) {
+    this._edgeVisibleIndices.delete(index);
+    this._fullyVisibleIndices.delete(index);
+  }
+
   private _dispatchItemEnterCallbacks() {
     if (!this.useVirtualList) return;
     if (!this.onItemEdgeEnterFn && !this.onItemFullEnterFn) return;
@@ -1460,7 +1465,7 @@ export class VirtualScrollView extends Component {
     this._upWidgetAlignment();
     const oldCount = this.totalCount;
     this.totalCount = Math.max(0, count | 0);
-    if (this.totalCount > 0) {
+    if (oldCount === 0 && this.totalCount > 0) {
       this._beginInitialAppearBatch();
     } else {
       this.unschedule(this._endInitialAppearBatch);
@@ -1495,9 +1500,6 @@ export class VirtualScrollView extends Component {
       this._recomputeContentSize();
     }
     this._slotFirstIndex = math.clamp(this._slotFirstIndex, 0, Math.max(0, this.totalCount - 1));
-    if (!this.useDynamicSize) {
-      this._layoutSlots(this._slotFirstIndex, true);
-    }
     this._updateVisible(true);
   }
 
@@ -2175,6 +2177,7 @@ export class VirtualScrollView extends Component {
       const previousIndex = newNode.getComponent(VScrollViewItem)?.dataIndex ?? -1;
       const shouldInit = !newNode.active || previousIndex !== idx;
       const appearContext = this._createItemAppearContext(idx, previousIndex >= 0 && previousIndex !== idx);
+      if (shouldInit) this._markItemNeedsEnterCallback(idx);
       // 不等高渲染回调里经常会测量 Label/RichText 的真实尺寸。
       // RichText 只有在 enabledInHierarchy 时才会立即排版，所以这里需要激活后再渲染。
       newNode.active = true;
@@ -2226,6 +2229,7 @@ export class VirtualScrollView extends Component {
       const previousIndex = node.getComponent(VScrollViewItem)?.dataIndex ?? -1;
       const shouldInit = !node.active || previousIndex !== idx;
       const appearContext = this._createItemAppearContext(idx, previousIndex >= 0 && previousIndex !== idx);
+      if (shouldInit) this._markItemNeedsEnterCallback(idx);
       node.active = false;
       const stride = this.itemMainSize + this.spacing;
       const line = Math.floor(idx / this.gridCount);
