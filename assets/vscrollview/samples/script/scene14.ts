@@ -81,7 +81,7 @@ export class scene14 extends Component {
       });
 
       this.vlist.refreshList(this.data);
-      this.vlist.scrollToBottom(true);
+      this.vlist.scrollToBottom(false);
     });
   }
 }
