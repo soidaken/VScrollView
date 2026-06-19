@@ -63,12 +63,13 @@ export class scene5 extends Component {
         const uitText = tnode.getComponent(UITransform);
         const bg = itemNode.getChildByName('bg');
         const uitBg = bg.getComponent(UITransform);
-        uitBg.height = uitText.height + 20 * 2;
+        const calculatedHeight = uitText.height + 20 * 2; // 根据文本高度加上上下留白
+        uitBg.height = calculatedHeight;
 
         //需要根据真实渲染内容计算出子项正确高度
         //这个必须外部自己提供,因为组件的高度你可能有自己留白的需求,比如下面的上下各留20px空白
         const uit = itemNode.getComponent(UITransform);
-        uit.height = uitBg.height;
+        uit.height = Math.max(calculatedHeight, 82);
       };
 
       // 更新列表
@@ -115,7 +116,7 @@ export class scene5 extends Component {
     // 更新列表
     this.vlist.refreshList(this.chatData.length);
 
-    this.vlist.scrollToBottom(true);
+    this.vlist.scrollToBottom(false);
   }
 
   // ✅ 修改某条消息时

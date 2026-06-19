@@ -8,7 +8,6 @@ import {
   Rect,
   Sprite,
   Tween,
-  tween,
   UITransform,
   Vec2,
   Vec3,
@@ -67,7 +66,7 @@ export default class UIButton extends Component {
   b_audioEffectWhenClick: boolean = false;
 
   // ==================== Constants ====================
-  @property({ tooltip: '触摸防抖间隔（毫秒）- 防止误触', range: [50, 500, 10] })
+  @property({ tooltip: '触摸抖动保护间隔（毫秒）- 只过滤极短时间内的异常重复触摸', range: [0, 300, 10] })
   debounceTouchInterval: number = 50;
 
   @property({
@@ -80,16 +79,18 @@ export default class UIButton extends Component {
     tooltip: '移动阈值（像素）- 超过此距离视为滑动而非点击',
     range: [5, 50, 1],
   })
-  movementThreshold: number = 10;
+  movementThreshold: number = 15;
 
   // ==================== Private Fields ====================
-  private _lastTouchStartTime: number = 0;
   private _lastTouchEndTime: number = 0;
-  private _currentTouchStartTime: number = 0;
   private _lastClickCallbackTime: number = 0;
+  private _clickCallbackRunning: boolean = false;
+  private _touchStarted: boolean = false;
+  private _touchAccepted: boolean = false;
   private _touchMoveValid = false;
   private _touchStartPos: Vec2 = new Vec2();
   private _touchMovedBeyondThreshold = false;
+  private _activeTouchId: number = -1;
   private _registed: boolean = false;
 
   private _initScale: Vec3 = new Vec3(1, 1, 1);
@@ -178,18 +179,29 @@ export default class UIButton extends Component {
     if (this.b_stopPropagation) {
       evt.propagationStopped = true;
     }
-    if (this.node_target) {
-      this._animatePressDown(this.node_target);
+
+    const touchId = this._getTouchId(evt);
+    if (this._touchStarted && this._activeTouchId !== touchId) {
+      return;
     }
+
+    this._touchStarted = true;
+    this._touchAccepted = false;
+    this._touchMoveValid = false;
+    this._touchMovedBeyondThreshold = false;
+    this._activeTouchId = touchId;
+    evt.getUILocation(this._touchStartPos);
 
     if (!this.debounceTouchStartValid()) {
       return;
     }
 
-    this._currentTouchStartTime = Date.now();
+    this._touchAccepted = true;
     this._touchMoveValid = true;
-    this._touchMovedBeyondThreshold = false;
-    evt.getUILocation(this._touchStartPos);
+
+    if (this.node_target) {
+      this._animatePressDown(this.node_target);
+    }
 
     this._cbStarted && this._cbStarted(this, evt);
   }
@@ -200,12 +212,16 @@ export default class UIButton extends Component {
     // 	evt.propagationStopped = true;
     // }
 
+    if (!this._isCurrentTouch(evt) || !this._touchAccepted) return;
+
     // 检查移动距离是否超过阈值
     if (!this._touchMovedBeyondThreshold) {
       const currentPos = evt.getUILocation(this._tmpVec2);
       const distance = Vec2.distance(this._touchStartPos, currentPos);
       if (distance > this.movementThreshold) {
         this._touchMovedBeyondThreshold = true;
+        this._cancelCurrentTouch(evt);
+        return;
       }
     }
 
@@ -213,10 +229,7 @@ export default class UIButton extends Component {
       const tpos = evt.getUILocation(this._tmpVec2);
       getBoundingBoxWorld(this._uit, this.node, this._tmpTouchMoveRect);
       if (this._touchMoveValid && !this._tmpTouchMoveRect.contains(tpos)) {
-        this._touchMoveValid = false;
-        // evt.propagationImmediateStopped = true;
-        this._animateRelease(this.node_target);
-        this._cbCanceled && this._cbCanceled(this, evt);
+        this._cancelCurrentTouch(evt);
         return;
       }
     }
@@ -228,16 +241,22 @@ export default class UIButton extends Component {
     if (this.b_stopPropagation) {
       evt.propagationStopped = true;
     }
+
+    if (!this._isCurrentTouch(evt)) return;
+    const canClick = this.clickSureValid();
+
     if (this.node_target) {
       this._animateRelease(this.node_target);
     }
 
-    this._cbEnded && this._cbEnded(this, evt);
+    if (this._touchAccepted) {
+      this._cbEnded && this._cbEnded(this, evt);
+    }
 
+    this._finishCurrentTouch();
 
-    if (this.clickSureValid() && this.clickCallbackValid()) {
-      this._cbClicked && (await this._cbClicked(this, evt));
-      this._lastClickCallbackTime = Date.now();
+    if (canClick) {
+      await this._runClickCallback(evt);
     }
   }
 
@@ -246,24 +265,28 @@ export default class UIButton extends Component {
       evt.propagationStopped = true;
     }
 
-    this._cbCanceled && this._cbCanceled(this, evt);
-    if (this.node_target) {
-      this._animateRelease(this.node_target);
-    }
+    if (!this._isCurrentTouch(evt)) return;
+    this._cancelCurrentTouch(evt);
+    this._finishCurrentTouch();
   }
 
   // ==================== Validation Methods ====================
   private debounceTouchStartValid(): boolean {
+    if (this.debounceTouchInterval <= 0 || this._lastTouchEndTime <= 0) {
+      return true;
+    }
     const now = Date.now();
-    const gap = now - this._lastTouchStartTime;
+    const gap = now - this._lastTouchEndTime;
     if (gap < this.debounceTouchInterval) {
       return false;
     }
-    this._lastTouchStartTime = now;
     return true;
   }
 
   private clickSureValid(): boolean {
+    if (!this._touchAccepted) {
+      return false;
+    }
     if (!this._touchMoveValid) {
       // console.logUI(`UIButton: clickSureValid false, touch moved out of bounds`);
       return false;
@@ -276,6 +299,9 @@ export default class UIButton extends Component {
   }
 
   private clickCallbackValid(): boolean {
+    if (this._clickCallbackRunning) {
+      return false;
+    }
     const now = Date.now();
     const gap = now - this._lastClickCallbackTime;
     if (gap < this.clickCallbackInterval) {
@@ -285,21 +311,59 @@ export default class UIButton extends Component {
     return true;
   }
 
+  private _getTouchId(evt: EventTouch): number {
+    const anyEvt = evt as any;
+    if (anyEvt.touch && typeof anyEvt.touch.getID === 'function') return anyEvt.touch.getID();
+    if (typeof anyEvt.touchId === 'number') return anyEvt.touchId;
+    return 0;
+  }
+
+  private _isCurrentTouch(evt: EventTouch): boolean {
+    if (!this._touchStarted) return false;
+    return this._getTouchId(evt) === this._activeTouchId;
+  }
+
+  private _cancelCurrentTouch(evt: EventTouch) {
+    if (!this._touchAccepted) return;
+    this._touchAccepted = false;
+    this._touchMoveValid = false;
+    if (this.node_target) {
+      this._animateRelease(this.node_target);
+    }
+    this._cbCanceled && this._cbCanceled(this, evt);
+  }
+
+  private _finishCurrentTouch() {
+    this._touchStarted = false;
+    this._touchAccepted = false;
+    this._touchMoveValid = false;
+    this._touchMovedBeyondThreshold = false;
+    this._activeTouchId = -1;
+    this._lastTouchEndTime = Date.now();
+  }
+
+  private async _runClickCallback(evt: EventTouch) {
+    if (!this._cbClicked || !this.clickCallbackValid()) return;
+    this._clickCallbackRunning = true;
+    this._lastClickCallbackTime = Date.now();
+    try {
+      await this._cbClicked(this, evt);
+    } catch (err) {
+      console.error('UIButton: click callback failed', err);
+    } finally {
+      this._clickCallbackRunning = false;
+    }
+  }
+
   // ==================== Helper Methods ====================
   private _adjustScaleTarget() {
-    const minDiff = 16;
-    const w = this.node.getComponent(UITransform)?.width;
-    if (!w) return;
-
-    const diff = Math.abs(this._initScale.x - this._initScale.x * this.scaleTarget) * w;
-    if (diff < minDiff && this._initScale.x !== 0) {
-      const sign = this.scaleTarget < 1 ? -1 : 1;
-      this.scaleTarget = (this._initScale.x * w + sign * minDiff) / (this._initScale.x * w);
-    }
+    if (!Number.isFinite(this.scaleTarget)) this.scaleTarget = 0.96;
+    this.scaleTarget = Math.min(1, Math.max(0.7, this.scaleTarget));
   }
 
   private _animatePressDown(target: Node) {
     if (!target || !this.b_interaction) return;
+    Tween.stopAllByTarget(target);
     target.setScale(
       this._initScale.x * this.scaleTarget,
       this._initScale.y * this.scaleTarget,
@@ -314,8 +378,8 @@ export default class UIButton extends Component {
     }
     Tween.stopAllByTarget(target);
     target.setScale(
-      this._initScale.x ,
-      this._initScale.y ,
+      this._initScale.x,
+      this._initScale.y,
       this._initScale.z
     );
 

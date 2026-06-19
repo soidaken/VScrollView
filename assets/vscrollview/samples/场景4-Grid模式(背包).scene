@@ -609,7 +609,7 @@
     "pageSnapTriggerVelocity": 600,
     "itemNodes": [],
     "itemPrefabs": [],
-    "triggerItemEnterCallbackOnce": false,
+    "triggerItemEnterCallbackOnce": true,
     "gridCount": 3,
     "gridSpacing": 10,
     "spacing": 10,

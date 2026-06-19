@@ -77,8 +77,6 @@ export class scene1 extends Component {
         data2: `2025.10.${this.data.length + 1}`,
       });
 
-      //有时候,列表在顶部,你要新增一项,这里就是先设置列表跳到旧的底部,再刷新滚动到新的底部,这就很自然.
-      this.vlist.flashToBottom();
       this.vlist.refreshList(this.data);
       this.vlist.scrollToBottom(true);
     });

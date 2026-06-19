@@ -595,21 +595,26 @@
     "content": null,
     "useVirtualList": true,
     "direction": 0,
+    "itemCreationMode": 1,
+    "itemNode": null,
     "itemPrefab": {
       "__uuid__": "d9a8c59c-c0e2-4d67-b447-c11d76418f6e",
       "__expectedType__": "cc.Prefab"
     },
     "useDynamicSize": true,
     "autoCenter": false,
-    "useDynamicHeight": true,
-    "columns": 1,
-    "columnSpacing": 0,
+    "enablePageSnap": false,
+    "pageSnapDuration": 0.15,
+    "pageSnapDistanceRatio": 0.15,
+    "pageSnapTriggerVelocity": 600,
+    "itemNodes": [],
     "itemPrefabs": [
       {
         "__uuid__": "4593def0-463d-4558-98a2-d77d423e27d8",
         "__expectedType__": "cc.Prefab"
       }
     ],
+    "triggerItemEnterCallbackOnce": true,
     "gridCount": 1,
     "gridSpacing": 8,
     "spacing": 8,
@@ -625,6 +630,11 @@
     "loadMoreMaxOffset": 150,
     "pullDampingRate": 0.5,
     "pixelAlign": true,
+    "disableBounce": false,
+    "blockParentScroll": true,
+    "limitStartDragAngle": false,
+    "startDragAngleThreshold": 30,
+    "scrollStyle": 0,
     "inertiaDampK": 1,
     "springK": 160,
     "springC": 26,
@@ -632,6 +642,8 @@
     "velocityWindow": 0.08,
     "maxVelocity": 6000,
     "useIOSDecelerationCurve": true,
+    "enableMouseWheel": false,
+    "mouseWheelSpeed": 3,
     "_id": "bdEEu2N7lPh4QSK7YvHn+c"
   },
   {

@@ -31,10 +31,10 @@ export class scene14 extends Component {
       title!.string = this.data[index].data1;
     };
 
-    this.vlist.onItemInitFn = (itemNode: Node, index: number, ctx: ItemAppearContext) => {
-      Tween.stopAllByTarget(itemNode);
-      itemNode.setScale(0, 0);
-    };
+    // this.vlist.onItemInitFn = (itemNode: Node, index: number, ctx: ItemAppearContext) => {
+    //   Tween.stopAllByTarget(itemNode);
+    //   itemNode.setScale(0, 0);
+    // };
 
     this.vlist.onItemEdgeEnterFn = (itemNode: Node, index: number, ctx: ItemAppearContext) => {
       Tween.stopAllByTarget(itemNode);
@@ -79,9 +79,9 @@ export class scene14 extends Component {
         data1: `新增的数据 ${this.data.length + 1}`,
         data2: `2025.10.${this.data.length + 1}`,
       });
-
+      // this.vlist.flashToBottom();
       this.vlist.refreshList(this.data);
-      this.vlist.scrollToBottom(false);
+      this.vlist.scrollToBottom(true);
     });
   }
 }

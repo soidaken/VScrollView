@@ -603,6 +603,10 @@ export class VirtualScrollView extends Component {
   private _layoutPassDepth: number = 0;
   private _hasPendingVisibleUpdate: boolean = false;
   private _pendingVisibleUpdateForce: boolean = false;
+  private _pendingSnapToEndAnimationStart: number | null = null;
+  private _pendingSnapToEndAnimationTarget: number = 0;
+  private _pendingSnapToEndAnimationVersion: number = 0;
+  private _deferEnterCallbacksForPendingSnap: boolean = false;
 
   // 私有状态变量
   private _refreshState: RefreshState = RefreshState.IDLE;
@@ -783,6 +787,37 @@ export class VirtualScrollView extends Component {
 
   private _isNearEndBound(pos: number, epsilon: number = 2): boolean {
     return Math.abs(pos - this._getEndBound()) <= epsilon;
+  }
+
+  private _wasAtEndBeforeResize(hasContent: boolean, oldPos: number): boolean {
+    return this._isStarted && hasContent && this._isNearEndBound(oldPos);
+  }
+
+  private _snapToEndAfterResize(oldPos: number) {
+    const endTarget = this._getEndBound();
+    this._setContentMainPos(endTarget);
+    if (Math.abs(endTarget - oldPos) <= 0.5) {
+      this._clearPendingSnapToEndAnimation();
+      return;
+    }
+    this._pendingSnapToEndAnimationStart = oldPos;
+    this._pendingSnapToEndAnimationTarget = endTarget;
+    this._deferEnterCallbacksForPendingSnap = true;
+    const version = ++this._pendingSnapToEndAnimationVersion;
+    this.scheduleOnce(() => {
+      if (this._pendingSnapToEndAnimationVersion === version) {
+        this._deferEnterCallbacksForPendingSnap = false;
+        this._clearPendingSnapToEndAnimation();
+        this._dispatchItemEnterCallbacks();
+      }
+    }, 0);
+  }
+
+  private _clearPendingSnapToEndAnimation() {
+    this._pendingSnapToEndAnimationStart = null;
+    this._pendingSnapToEndAnimationTarget = 0;
+    this._pendingSnapToEndAnimationVersion++;
+    this._deferEnterCallbacksForPendingSnap = false;
   }
 
   private _setContentMainPos(pos: number) {
@@ -1142,7 +1177,7 @@ export class VirtualScrollView extends Component {
   private _buildPrefixSum() {
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
-    const wasAtEnd = this._isStarted && hasContent && this._hasScrollableRange() ? this._isNearEndBound(oldPos) : false;
+    const wasAtEnd = this._wasAtEndBeforeResize(hasContent, oldPos);
     const skipSnapToEnd = this._skipSnapToEndOnce;
     this._skipSnapToEndOnce = false;
 
@@ -1169,7 +1204,7 @@ export class VirtualScrollView extends Component {
     }
 
     if (wasAtEnd && !skipSnapToEnd) {
-      this._setContentMainPos(this._getEndBound());
+      this._snapToEndAfterResize(oldPos);
     }
   }
 
@@ -1232,6 +1267,7 @@ export class VirtualScrollView extends Component {
   private _dispatchItemEnterCallbacks() {
     if (!this.useVirtualList) return;
     if (!this.onItemEdgeEnterFn && !this.onItemFullEnterFn) return;
+    if (this._deferEnterCallbacksForPendingSnap) return;
 
     const viewportStart = this._isVertical() ? this._getContentMainPos() : -this._getContentMainPos();
     const viewportEnd = viewportStart + this._viewportSize;
@@ -1373,7 +1409,7 @@ export class VirtualScrollView extends Component {
     if (oldSize === newSize) return;
 
     const oldPos = this.content ? this._getContentMainPos() : 0;
-    const wasAtEnd = this._isStarted && !!this.content && this._hasScrollableRange() && this._isNearEndBound(oldPos);
+    const wasAtEnd = this._wasAtEndBeforeResize(!!this.content, oldPos);
     const viewportStart = this._isVertical() ? oldPos : -oldPos;
     const itemStart = this._prefixPositions[index] || 0;
     const itemEnd = itemStart + oldSize;
@@ -1395,7 +1431,7 @@ export class VirtualScrollView extends Component {
   private _rebuildPrefixSumFrom(startIndex: number) {
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
-    const wasAtEnd = this._isStarted && hasContent && this._hasScrollableRange() ? this._isNearEndBound(oldPos) : false;
+    const wasAtEnd = this._wasAtEndBeforeResize(hasContent, oldPos);
     const skipSnapToEnd = this._skipSnapToEndOnce;
     this._skipSnapToEndOnce = false;
 
@@ -1422,7 +1458,7 @@ export class VirtualScrollView extends Component {
     }
 
     if (wasAtEnd && !skipSnapToEnd) {
-      this._setContentMainPos(this._getEndBound());
+      this._snapToEndAfterResize(oldPos);
     }
   }
 
@@ -1504,8 +1540,13 @@ export class VirtualScrollView extends Component {
   }
 
   _upWidgetAlignment() {
-    this.content?.getComponent?.(Widget)?.updateAlignment?.();
+    const hasContent = !!this.content;
+    const oldPos = hasContent ? this._getContentMainPos() : 0;
     this.node?.getComponent?.(Widget)?.updateAlignment?.();
+    this.content?.getComponent?.(Widget)?.updateAlignment?.();
+    if (this._isStarted && hasContent) {
+      this._setContentMainPos(oldPos);
+    }
   }
 
   private _expandSlotsIfNeeded() {
@@ -1632,6 +1673,11 @@ export class VirtualScrollView extends Component {
   public scrollToBottom(animate = false, duration?: number, onComplete?: () => void) {
     if (this._runOrQueueAfterStart(() => this.scrollToBottom(animate, duration, onComplete))) return;
     const target = this._isVertical() ? this._boundsMax : this._boundsMin;
+    if (animate && this._pendingSnapToEndAnimationStart !== null && Math.abs(target - this._pendingSnapToEndAnimationTarget) <= 0.5) {
+      this._setContentMainPos(this._pendingSnapToEndAnimationStart);
+      this._updateVisible(true);
+    }
+    this._clearPendingSnapToEndAnimation();
     this._scrollToPosition(target, animate, duration, () => {
       const endTarget = this._isVertical() ? this._boundsMax : this._boundsMin;
       if (Math.abs(this._getContentMainPos() - endTarget) > 0.5) {
@@ -2401,7 +2447,7 @@ export class VirtualScrollView extends Component {
     if (this.useDynamicSize) return;
     const hasContent = !!this.content;
     const oldPos = hasContent ? this._getContentMainPos() : 0;
-    const wasAtEnd = this._isStarted && hasContent && this._hasScrollableRange() ? this._isNearEndBound(oldPos) : false;
+    const wasAtEnd = this._wasAtEndBeforeResize(hasContent, oldPos);
     const skipSnapToEnd = this._skipSnapToEndOnce;
     this._skipSnapToEndOnce = false;
     const stride = this.itemMainSize + this.spacing;
@@ -2420,7 +2466,7 @@ export class VirtualScrollView extends Component {
     }
 
     if (wasAtEnd && !skipSnapToEnd) {
-      this._setContentMainPos(this._getEndBound());
+      this._snapToEndAfterResize(oldPos);
     }
   }
 
