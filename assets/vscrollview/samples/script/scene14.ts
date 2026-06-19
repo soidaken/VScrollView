@@ -40,6 +40,7 @@ export class scene14 extends Component {
       Tween.stopAllByTarget(itemNode);
       const delay = ctx.isInitialBatch ? 0.03 * ctx.appearOrder : 0;
       tween(itemNode)
+        .set({ scale: v3(0, 0, 1) })
         .delay(delay)
         .to(
           0.5,
