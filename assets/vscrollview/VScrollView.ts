@@ -609,6 +609,17 @@ export class VirtualScrollView extends Component {
   private _layoutPassDepth: number = 0;
   private _hasPendingVisibleUpdate: boolean = false;
   private _pendingVisibleUpdateForce: boolean = false;
+  // 物理/逻辑用的浮点位置真值，节点上的位置只是它的取整渲染结果
+  private _floatPos: number = 0;
+  // 测量到新尺寸后只需要重排位置，不需要重新渲染子项
+  private _hasPendingReposition: boolean = false;
+  // 越界吸附阈值：弹簧回弹收敛到这里就精确贴边并停止
+  private _settleEpsilon: number = 0.01;
+  // 延迟入场回调的兜底帧计数（节点隐藏时 scheduleOnce 不执行）
+  private _deferEnterCallbacksFrames: number = 0;
+  // 每帧复用的可见性集合，避免每帧 new Set
+  private _edgeVisibleScratch: Set<number> = new Set();
+  private _fullyVisibleScratch: Set<number> = new Set();
   private _pendingSnapToEndAnimationStart: number | null = null;
   private _pendingSnapToEndAnimationTarget: number = 0;
   private _pendingSnapToEndAnimationVersion: number = 0;
@@ -652,6 +663,16 @@ export class VirtualScrollView extends Component {
     this._initialAppearSequence = 0;
     this._initialAppearOrders.clear();
   };
+
+  /**
+   * 把节点上的实际位置同步回浮点真值。
+   * 只有外部直接改 content 位置时才需要（tween 滚动、Widget 对齐）
+   */
+  private _syncFloatPosFromNode() {
+    if (!this.content || !this.content.isValid) return;
+    const p = this.content.position;
+    this._floatPos = this._isVertical() ? p.y : p.x;
+  }
 
   private get _contentTf(): UITransform {
     this.content = this._getContentNode();
@@ -737,18 +758,20 @@ export class VirtualScrollView extends Component {
     }
   }
 
+  /**
+   * delta 是否让内容朝「起始边界」方向移动。
+   * 起始边界：vertical 为 pos=minBound（列表顶部），horizontal 为 pos=maxBound（最左侧）
+   * 与 _onMove 里下拉刷新/上拉加载的判断方向保持一致
+   */
   private _isMovingTowardStart(delta: number): boolean {
-    // 与原有滚动物理保持一致：
-    // vertical: delta > 0 视为 towardStart
-    // horizontal: delta < 0 视为 towardStart
-    return this._isVertical() ? delta > 0 : delta < 0;
+    return this._isVertical() ? delta < 0 : delta > 0;
   }
 
+  /**
+   * delta 是否让内容朝「结束边界」方向移动（正常滚动深入列表的方向）
+   */
   private _isMovingTowardEnd(delta: number): boolean {
-    // 与原有滚动物理保持一致：
-    // vertical: delta < 0 视为 towardEnd
-    // horizontal: delta > 0 视为 towardEnd
-    return this._isVertical() ? delta < 0 : delta > 0;
+    return this._isVertical() ? delta > 0 : delta < 0;
   }
 
   private _canHandleMainAxisDelta(delta: number): boolean {
@@ -762,9 +785,9 @@ export class VirtualScrollView extends Component {
     const movingToEnd = this._isMovingTowardEnd(delta);
 
     if (Math.abs(maxBound - minBound) <= 0.001) {
-      // 无可滚动空间时，towardEnd 对应刷新方向，towardStart 对应加载方向
-      if (movingToEnd) return this.enablePullRefresh;
-      if (movingToStart) return this.enableLoadMore && this._hasMore;
+      // 无可滚动空间时，朝起始边界方向（拉出顶部/左侧）对应刷新，朝结束边界方向对应加载
+      if (movingToStart) return this.enablePullRefresh;
+      if (movingToEnd) return this.enableLoadMore && this._hasMore;
       return false;
     }
     if (!atStartBound && !atEndBound) return true;
@@ -779,8 +802,13 @@ export class VirtualScrollView extends Component {
     return this._isVertical() ? this._viewportTf.height : this._viewportTf.width;
   }
 
+  /**
+   * 返回主方向的浮点位置（物理真值）。
+   * tween 会直接写节点位置，此时以节点为准并回同步真值，避免物理读到过期数据
+   */
   private _getContentMainPos(): number {
-    return this._isVertical() ? this.content!.position.y : this.content!.position.x;
+    if (this._scrollTween) this._syncFloatPosFromNode();
+    return this._floatPos;
   }
 
   private _getEndBound(): number {
@@ -809,6 +837,7 @@ export class VirtualScrollView extends Component {
     this._pendingSnapToEndAnimationStart = oldPos;
     this._pendingSnapToEndAnimationTarget = endTarget;
     this._deferEnterCallbacksForPendingSnap = true;
+    this._deferEnterCallbacksFrames = 0;
     const version = ++this._pendingSnapToEndAnimationVersion;
     this.scheduleOnce(() => {
       if (this._pendingSnapToEndAnimationVersion === version) {
@@ -824,18 +853,25 @@ export class VirtualScrollView extends Component {
     this._pendingSnapToEndAnimationTarget = 0;
     this._pendingSnapToEndAnimationVersion++;
     this._deferEnterCallbacksForPendingSnap = false;
+    this._deferEnterCallbacksFrames = 0;
   }
 
+  /**
+   * 写入主方向位置。
+   * pos 是浮点真值，先记录再按 pixelAlign 取整渲染，
+   * 避免取整误差回馈进物理想成（否则回弹会收敛不到边界、残余速度不归零）
+   */
   private _setContentMainPos(pos: number) {
     if (!Number.isFinite(pos)) return;
-    if (this.pixelAlign) pos = Math.round(pos);
+    this._floatPos = pos;
+    const renderPos = this.pixelAlign ? Math.round(pos) : pos;
     const p = this.content!.position;
     if (this._isVertical()) {
-      if (pos === p.y) return;
-      this.content!.setPosition(p.x, pos, p.z);
+      if (renderPos === p.y) return;
+      this.content!.setPosition(p.x, renderPos, p.z);
     } else {
-      if (pos === p.x) return;
-      this.content!.setPosition(pos, p.y, p.z);
+      if (renderPos === p.x) return;
+      this.content!.setPosition(renderPos, p.y, p.z);
     }
   }
 
@@ -844,6 +880,7 @@ export class VirtualScrollView extends Component {
   async start() {
     this.content = this._getContentNode();
     if (!this.content) return;
+    this._syncFloatPosFromNode();
     this._parentScrollView = this._findParentScrollView();
     const mask = this.node.getComponent(Mask);
     if (!mask) console.warn('[VirtualScrollView] 建议在视窗节点挂一个 Mask 组件用于裁剪');
@@ -895,6 +932,8 @@ export class VirtualScrollView extends Component {
   private _resetItemEnterCallbackState() {
     this._edgeVisibleIndices.clear();
     this._fullyVisibleIndices.clear();
+    this._edgeVisibleScratch.clear();
+    this._fullyVisibleScratch.clear();
     this._initTriggeredIndices.clear();
     this._edgeTriggeredIndices.clear();
     this._fullyTriggeredIndices.clear();
@@ -942,7 +981,7 @@ export class VirtualScrollView extends Component {
     this.node.on(Node.EventType.TOUCH_END, this._onUp, this);
     this.node.on(Node.EventType.TOUCH_CANCEL, this._onUp, this);
     if (this.enableMouseWheel) {
-      // this.node.on(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+      this.node.on(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
     }
   }
 
@@ -1277,8 +1316,13 @@ export class VirtualScrollView extends Component {
 
     const viewportStart = this._isVertical() ? this._getContentMainPos() : -this._getContentMainPos();
     const viewportEnd = viewportStart + this._viewportSize;
-    const nextEdgeVisibleIndices: Set<number> = new Set();
-    const nextFullyVisibleIndices: Set<number> = new Set();
+    // 复用上一次的集合作为 scratch，避免每帧 new Set 产生 GC 压力
+    const prevEdgeVisibleIndices = this._edgeVisibleIndices;
+    const prevFullyVisibleIndices = this._fullyVisibleIndices;
+    const nextEdgeVisibleIndices = this._edgeVisibleScratch;
+    const nextFullyVisibleIndices = this._fullyVisibleScratch;
+    nextEdgeVisibleIndices.clear();
+    nextFullyVisibleIndices.clear();
 
     for (let slot = 0; slot < this._slots; slot++) {
       const index = this._slotFirstIndex + slot;
@@ -1292,7 +1336,7 @@ export class VirtualScrollView extends Component {
 
       nextEdgeVisibleIndices.add(index);
       const hasTriggeredEdge = this.triggerItemEnterCallbackOnce && this._edgeTriggeredIndices.has(index);
-      if (!this._edgeVisibleIndices.has(index) && !hasTriggeredEdge && this.onItemEdgeEnterFn) {
+      if (!prevEdgeVisibleIndices.has(index) && !hasTriggeredEdge && this.onItemEdgeEnterFn) {
         const appearContext = this._createItemAppearContext(index, false);
         this.onItemEdgeEnterFn(node, index, appearContext);
         if (this.triggerItemEnterCallbackOnce) {
@@ -1305,7 +1349,7 @@ export class VirtualScrollView extends Component {
 
       nextFullyVisibleIndices.add(index);
       const hasTriggeredFull = this.triggerItemEnterCallbackOnce && this._fullyTriggeredIndices.has(index);
-      if (!this._fullyVisibleIndices.has(index) && !hasTriggeredFull && this.onItemFullEnterFn) {
+      if (!prevFullyVisibleIndices.has(index) && !hasTriggeredFull && this.onItemFullEnterFn) {
         const appearContext = this._createItemAppearContext(index, false);
         this.onItemFullEnterFn(node, index, appearContext);
         if (this.triggerItemEnterCallbackOnce) {
@@ -1316,9 +1360,16 @@ export class VirtualScrollView extends Component {
 
     this._edgeVisibleIndices = nextEdgeVisibleIndices;
     this._fullyVisibleIndices = nextFullyVisibleIndices;
+    this._edgeVisibleScratch = prevEdgeVisibleIndices;
+    this._fullyVisibleScratch = prevFullyVisibleIndices;
   }
 
   update(dt: number) {
+    // 节点被隐藏时 scheduleOnce 不会执行，这里兜底清除延迟标记，避免入场回调永久失效
+    if (this._deferEnterCallbacksForPendingSnap && ++this._deferEnterCallbacksFrames > 1) {
+      this._clearPendingSnapToEndAnimation();
+      this._dispatchItemEnterCallbacks();
+    }
     if (!this.content || this._isTouching || this._scrollTween) return;
     let pos = this._getContentMainPos();
     let a = 0;
@@ -1342,10 +1393,22 @@ export class VirtualScrollView extends Component {
         this._velocity = 0;
         return;
       }
+      // 回弹完全收敛后精确贴边并停止，避免弹簧尾巴永远不归零
+      if (minBound - pos <= this._settleEpsilon && Math.abs(this._velocity) < this.velocitySnap) {
+        this._setContentMainPos(minBound);
+        this._velocity = 0;
+        return;
+      }
       a = -this.springK * (pos - minBound) - this.springC * this._velocity;
     } else if (pos > maxBound) {
       // 如果禁用越界滚动，直接限制位置并停止速度
       if (this.disableBounce) {
+        this._setContentMainPos(maxBound);
+        this._velocity = 0;
+        return;
+      }
+      // 回弹完全收敛后精确贴边并停止，避免弹簧尾巴永远不归零
+      if (pos - maxBound <= this._settleEpsilon && Math.abs(this._velocity) < this.velocitySnap) {
         this._setContentMainPos(maxBound);
         this._velocity = 0;
         return;
@@ -1380,7 +1443,7 @@ export class VirtualScrollView extends Component {
         pos = math.clamp(pos, minBound, maxBound);
       }
 
-      if (this.pixelAlign) pos = Math.round(pos);
+      // 取整只在 _setContentMainPos 内部做，这里保持浮点真值
       this._setContentMainPos(pos);
       if (this.useVirtualList) this._updateVisible(false);
     }
@@ -1407,6 +1470,7 @@ export class VirtualScrollView extends Component {
     if (this._itemSizes[index] === size) return;
     this._itemSizes[index] = size;
     this._rebuildPrefixSumFrom(index);
+
     this._requestVisibleUpdate(true);
   }
 
@@ -1431,7 +1495,8 @@ export class VirtualScrollView extends Component {
       this._setContentMainPos(oldPos + anchorOffset);
     }
 
-    this._requestVisibleUpdate(true);
+    // 只把受影响的子项重新摆位，不需要重跑 renderItemFn
+    this._requestReposition();
   }
 
   private _rebuildPrefixSumFrom(startIndex: number) {
@@ -1518,6 +1583,11 @@ export class VirtualScrollView extends Component {
     if (this.totalCount > oldCount) {
       for (let i = oldCount; i < this.totalCount; i++) {
         this._needAnimateIndices.add(i);
+      }
+    } else if (this._needAnimateIndices.size > 0) {
+      // 数据变短时清掉越界的待入场索引，避免集合只增不减
+      for (const i of Array.from(this._needAnimateIndices)) {
+        if (i >= this.totalCount) this._needAnimateIndices.delete(i);
       }
     }
     if (this.useDynamicSize) {
@@ -1634,7 +1704,7 @@ export class VirtualScrollView extends Component {
     this._activeTouchId = -1;
     this._velSamples.length = 0;
     if (!animate) {
-      this._setContentMainPos(this.pixelAlign ? Math.round(targetPos) : targetPos);
+      this._setContentMainPos(targetPos);
       this._updateVisible(true);
       onComplete?.();
     } else {
@@ -1656,6 +1726,7 @@ export class VirtualScrollView extends Component {
         )
         .call(() => {
           this._updateVisible(true);
+          this._syncFloatPosFromNode();
           this._scrollTween = null;
           this._velocity = 0;
           onComplete?.();
@@ -1666,7 +1737,6 @@ export class VirtualScrollView extends Component {
 
   public scrollToPosition(targetPos: number, animate = false, duration?: number, onComplete?: () => void) {
     if (this._runOrQueueAfterStart(() => this.scrollToPosition(targetPos, animate, duration, onComplete))) return;
-    const target = this._isVertical() ? this._boundsMin : this._boundsMax;
     this._scrollToPosition(targetPos, animate, duration, onComplete);
   }
 
@@ -1747,7 +1817,7 @@ export class VirtualScrollView extends Component {
     this._isTouching = false;
     this._activeTouchId = -1;
     this._velSamples.length = 0;
-    this._setContentMainPos(this.pixelAlign ? Math.round(targetPos) : targetPos);
+    this._setContentMainPos(targetPos);
     this._updateVisible(true);
   }
 
@@ -1842,6 +1912,8 @@ export class VirtualScrollView extends Component {
     if (this._scrollTween) {
       this._scrollTween.stop();
       this._scrollTween = null;
+      // tween 直接写节点位置，停止后同步一次真值，避免物理从过期位置起算
+      this._syncFloatPosFromNode();
     }
   }
 
@@ -1952,7 +2024,6 @@ export class VirtualScrollView extends Component {
     }
 
     pos += finalDelta;
-    if (this.pixelAlign) pos = Math.round(pos);
     this._setContentMainPos(pos);
 
     const t = performance.now() / 1000;
@@ -2199,7 +2270,7 @@ export class VirtualScrollView extends Component {
     this._dispatchItemEnterCallbacks();
   }
 
-  private async _layoutSingleSlot(node: Node | null, idx: number, slot: number) {
+  private _layoutSingleSlot(node: Node | null, idx: number, slot: number) {
     if (!this.useVirtualList) return;
     if (this.useDynamicSize) {
       let targetPrefabIndex = this.getItemTypeIndexFn(idx);
@@ -2238,7 +2309,7 @@ export class VirtualScrollView extends Component {
       if (this.getItemHeightFn) {
         const expectedSize = this.getItemHeightFn(idx);
         if (this._itemSizes[idx] !== expectedSize) {
-          this.updateItemHeight(idx, expectedSize);
+          this._updateMeasuredItemSize(idx, expectedSize);
           return;
         }
       } else {
@@ -2249,25 +2320,7 @@ export class VirtualScrollView extends Component {
           return;
         }
       }
-      const uit = newNode.getComponent(UITransform);
-      const size = this._itemSizes[idx];
-      const itemStart = this._prefixPositions[idx];
-      if (this._isVertical()) {
-        const anchorY = uit?.anchorY ?? 0.5;
-        const anchorOffsetY = size * (1 - anchorY);
-        const nodeY = itemStart + anchorOffsetY;
-        const y = -nodeY;
-        newNode.setPosition(0, this.pixelAlign ? Math.round(y) : y);
-      } else {
-        // 修改：横向模式下，itemStart 是正值，但 content.x 是负值
-        // 所以 item 的 x 位置应该直接使用 itemStart（因为 content 整体向左移动）
-        const anchorX = uit?.anchorX ?? 0.5;
-        const anchorOffsetX = size * anchorX;
-        const nodeX = itemStart + anchorOffsetX;
-        // 不需要取负，因为 content 本身已经是负值了
-        const x = nodeX;
-        newNode.setPosition(this.pixelAlign ? Math.round(x) : x, 0);
-      }
+      this._applyDynamicItemPosition(newNode, idx);
       if (shouldInit) this._prepareItemBeforeShow(newNode, idx, appearContext);
       else newNode.active = true;
       if (this._needAnimateIndices.has(idx)) {
@@ -2414,6 +2467,55 @@ export class VirtualScrollView extends Component {
     itemScript.setDataIndex(index);
   }
 
+  /**
+   * 按当前前缀和重新摆放单个槽位节点（不触发 renderItemFn，也不动节点池）
+   */
+  private _applyDynamicItemPosition(node: Node, idx: number) {
+    const uit = node.getComponent(UITransform);
+    const size = this._itemSizes[idx];
+    const itemStart = this._prefixPositions[idx];
+    if (this._isVertical()) {
+      const anchorY = uit?.anchorY ?? 0.5;
+      const anchorOffsetY = size * (1 - anchorY);
+      const nodeY = itemStart + anchorOffsetY;
+      const y = -nodeY;
+      node.setPosition(0, this.pixelAlign ? Math.round(y) : y);
+    } else {
+      // 修改：横向模式下，itemStart 是正值，但 content.x 是负值
+      // 所以 item 的 x 位置应该直接使用 itemStart（因为 content 整体向左移动）
+      const anchorX = uit?.anchorX ?? 0.5;
+      const anchorOffsetX = size * anchorX;
+      const nodeX = itemStart + anchorOffsetX;
+      // 不需要取负，因为 content 本身已经是负值了
+      const x = nodeX;
+      node.setPosition(this.pixelAlign ? Math.round(x) : x, 0);
+    }
+  }
+
+  /**
+   * 只按最新前缀和重摆位置。
+   * 尺寸测量发生变化时，只有位置变了，内容不需要重新渲染，
+   * 避免在滚动中每测到一个尺寸就重跑一次全部可见子项的 renderItemFn
+   */
+  private _repositionSlots() {
+    if (!this.useVirtualList || !this.useDynamicSize) return;
+    for (let s = 0; s < this._slots; s++) {
+      const idx = this._slotFirstIndex + s;
+      if (idx >= this.totalCount) continue;
+      const node = this._slotNodes[s];
+      if (!node || !node.active) continue;
+      this._applyDynamicItemPosition(node, idx);
+    }
+  }
+
+  private _requestReposition() {
+    if (this._layoutPassDepth > 0) {
+      this._hasPendingReposition = true;
+      return;
+    }
+    this._repositionSlots();
+  }
+
   private _layoutSlots(firstIndex: number, forceRender: boolean) {
     if (!this.useVirtualList) return;
     this._layoutPassDepth++;
@@ -2429,11 +2531,19 @@ export class VirtualScrollView extends Component {
       }
     } finally {
       this._layoutPassDepth--;
-      if (this._layoutPassDepth === 0 && this._hasPendingVisibleUpdate) {
-        const force = this._pendingVisibleUpdateForce;
-        this._hasPendingVisibleUpdate = false;
-        this._pendingVisibleUpdateForce = false;
-        this._updateVisible(force);
+      if (this._layoutPassDepth === 0) {
+        if (this._hasPendingVisibleUpdate) {
+          const force = this._pendingVisibleUpdateForce;
+          this._hasPendingVisibleUpdate = false;
+          this._pendingVisibleUpdateForce = false;
+          // 全量更新会重新摆位，测量产生的重排请求可以合并掉
+          if (force) this._hasPendingReposition = false;
+          this._updateVisible(force);
+        }
+        if (this._hasPendingReposition) {
+          this._hasPendingReposition = false;
+          this._repositionSlots();
+        }
       }
     }
   }
@@ -2541,8 +2651,6 @@ export class VirtualScrollView extends Component {
 
       for (let i = 0; i < this.totalCount; i++) {
         const itemStart = this._prefixPositions[i];
-        const itemSize = this._itemSizes[i];
-        const itemCenter = itemStart + itemSize / 2;
         const dist = Math.abs(searchPos - itemStart);
 
         if (dist < minDist) {
